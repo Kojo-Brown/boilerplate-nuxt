@@ -11,7 +11,7 @@
 
 ## Phase 2 — Auth & State
 - [x] Nuxt Auth Utils (`nuxt-auth-utils`) with credentials + GitHub provider
-- [ ] Pinia store with `defineStore` + persist plugin
+- [x] Pinia store with `defineStore` + persist plugin
 - [ ] `useAuth()` composable wrapping session
 - [ ] Route middleware: `auth.ts` global middleware
 
