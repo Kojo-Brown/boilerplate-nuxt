@@ -9,6 +9,10 @@ export default defineNuxtConfig({
     '@nuxtjs/color-mode',
   ],
 
+  pinia: {
+    storesDirs: ['./stores/**'],
+  },
+
   typescript: {
     strict: true,
     typeCheck: false,

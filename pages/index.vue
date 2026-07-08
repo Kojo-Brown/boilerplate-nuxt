@@ -11,11 +11,15 @@ async function handleLogout() {
   await clear()
   await navigateTo('/login')
 }
+
+const counter = useCounterStore()
+const preferences = usePreferencesStore()
 </script>
 
 <template>
   <div class="min-h-screen bg-[var(--color-background)] p-8">
-    <div class="mx-auto max-w-2xl">
+    <div class="mx-auto max-w-2xl space-y-6">
+      <!-- User card -->
       <div
         class="space-y-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6"
       >
@@ -30,10 +34,7 @@ async function handleLogout() {
         </div>
 
         <div v-if="user" class="space-y-3">
-          <div
-            v-if="user.avatarUrl"
-            class="flex items-center gap-4"
-          >
+          <div v-if="user.avatarUrl" class="flex items-center gap-4">
             <img
               :src="user.avatarUrl"
               :alt="`${user.name} avatar`"
@@ -65,6 +66,121 @@ async function handleLogout() {
                 {{ user.provider }}
               </span>
             </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Counter store demo -->
+      <div
+        class="rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6 space-y-4"
+      >
+        <h2 class="text-lg font-semibold text-[var(--color-foreground)]">
+          Counter Store
+          <span class="ml-2 text-xs font-normal text-[var(--color-muted-foreground)]">
+            persisted to localStorage
+          </span>
+        </h2>
+
+        <div class="flex items-center gap-4">
+          <span class="text-4xl font-bold text-[var(--color-primary)]">{{ counter.count }}</span>
+          <div class="space-y-1 text-sm text-[var(--color-muted-foreground)]">
+            <p>Doubled: {{ counter.doubled }}</p>
+            <p>Positive: {{ counter.isPositive }}</p>
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <button
+            class="rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90"
+            @click="counter.increment()"
+          >
+            +1
+          </button>
+          <button
+            class="rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2 text-sm font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
+            @click="counter.decrement()"
+          >
+            −1
+          </button>
+          <button
+            class="rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2 text-sm font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
+            @click="counter.reset()"
+          >
+            Reset
+          </button>
+        </div>
+
+        <p v-if="counter.lastUpdated" class="text-xs text-[var(--color-muted-foreground)]">
+          Last updated: {{ counter.lastUpdated }}
+        </p>
+      </div>
+
+      <!-- Preferences store demo -->
+      <div
+        class="rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6 space-y-4"
+      >
+        <h2 class="text-lg font-semibold text-[var(--color-foreground)]">
+          Preferences Store
+          <span class="ml-2 text-xs font-normal text-[var(--color-muted-foreground)]">
+            persisted to localStorage
+          </span>
+        </h2>
+
+        <div class="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <label class="block font-medium text-[var(--color-foreground)] mb-1">Color mode</label>
+            <div class="flex gap-2">
+              <button
+                v-for="mode in ['light', 'dark', 'system'] as const"
+                :key="mode"
+                class="rounded px-3 py-1 text-xs font-medium border transition-colors"
+                :class="
+                  preferences.colorMode === mode
+                    ? 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] border-[var(--color-primary)]'
+                    : 'bg-[var(--color-background)] text-[var(--color-foreground)] border-[var(--color-border)]'
+                "
+                @click="preferences.setColorMode(mode)"
+              >
+                {{ mode }}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-medium text-[var(--color-foreground)] mb-1">Sidebar</label>
+            <button
+              class="rounded px-3 py-1 text-xs font-medium border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)]"
+              @click="preferences.toggleSidebar()"
+            >
+              {{ preferences.isSidebarOpen ? 'Close sidebar' : 'Open sidebar' }}
+            </button>
+          </div>
+
+          <div>
+            <label class="block font-medium text-[var(--color-foreground)] mb-1">Language</label>
+            <select
+              class="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs text-[var(--color-foreground)]"
+              :value="preferences.language"
+              @change="preferences.setLanguage(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="en">English</option>
+              <option value="fr">Français</option>
+              <option value="es">Español</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block font-medium text-[var(--color-foreground)] mb-1">Page size</label>
+            <select
+              class="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs text-[var(--color-foreground)]"
+              :value="preferences.pageSize"
+              @change="preferences.setPageSize(Number(($event.target as HTMLSelectElement).value))"
+            >
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
           </div>
         </div>
       </div>
