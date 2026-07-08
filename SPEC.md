@@ -10,7 +10,7 @@
 - [x] Zod-validated runtime config (`runtimeConfig` + validation)
 
 ## Phase 2 — Auth & State
-- [ ] Nuxt Auth Utils (`nuxt-auth-utils`) with credentials + GitHub provider
+- [x] Nuxt Auth Utils (`nuxt-auth-utils`) with credentials + GitHub provider
 - [ ] Pinia store with `defineStore` + persist plugin
 - [ ] `useAuth()` composable wrapping session
 - [ ] Route middleware: `auth.ts` global middleware
