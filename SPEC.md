@@ -13,7 +13,7 @@
 - [x] Nuxt Auth Utils (`nuxt-auth-utils`) with credentials + GitHub provider
 - [x] Pinia store with `defineStore` + persist plugin
 - [x] `useAuth()` composable wrapping session
-- [ ] Route middleware: `auth.ts` global middleware
+- [x] Route middleware: `auth.ts` global middleware
 
 ## Phase 3 — Data Layer
 - [ ] `$fetch` typed API layer with request/response interceptors
