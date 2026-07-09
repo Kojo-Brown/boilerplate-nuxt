@@ -1,11 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
 
-const { loggedIn, fetch: refreshSession } = useUserSession()
-
-if (loggedIn.value) {
-  await navigateTo('/')
-}
+const { fetch: refreshSession } = useUserSession()
 
 const email = ref('')
 const password = ref('')

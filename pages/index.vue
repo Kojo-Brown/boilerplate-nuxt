@@ -1,11 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
 
-const { user, loggedIn, clear } = useUserSession()
-
-if (!loggedIn.value) {
-  await navigateTo('/login')
-}
+const { user, clear } = useUserSession()
 
 async function handleLogout() {
   await clear()
