@@ -23,6 +23,7 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
+    databaseUrl: process.env['DATABASE_URL'] ?? '',
     session: {
       maxAge: 60 * 60 * 24 * 7,
     },
