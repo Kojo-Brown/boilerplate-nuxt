@@ -17,7 +17,7 @@
 
 ## Phase 3 — Data Layer
 - [x] `$fetch` typed API layer with request/response interceptors
-- [ ] `useAsyncData` patterns: polling, refresh, dedupe
+- [x] `useAsyncData` patterns: polling, refresh, dedupe
 - [ ] Drizzle ORM + PostgreSQL via Nuxt server API routes
 - [ ] File upload via Nuxt server route + S3
 
