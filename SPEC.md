@@ -19,7 +19,7 @@
 - [x] `$fetch` typed API layer with request/response interceptors
 - [x] `useAsyncData` patterns: polling, refresh, dedupe
 - [x] Drizzle ORM + PostgreSQL via Nuxt server API routes
-- [ ] File upload via Nuxt server route + S3
+- [x] File upload via Nuxt server route + S3
 
 ## Phase 4 — UI System
 - [ ] UI primitives composing with `<slot>` pattern: Button, Modal, Toast
