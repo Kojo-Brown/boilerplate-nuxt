@@ -7,6 +7,22 @@ export interface Post {
   updatedAt: string
 }
 
+export interface Upload {
+  id: string
+  key: string
+  filename: string
+  contentType: string
+  size: number
+  url: string
+  createdAt: string
+}
+
+export interface PresignResponse {
+  key: string
+  uploadUrl: string
+  publicUrl: string
+}
+
 export interface ApiResponse<T> {
   data: T
   message: string
