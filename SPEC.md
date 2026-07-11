@@ -22,7 +22,7 @@
 - [x] File upload via Nuxt server route + S3
 
 ## Phase 4 — UI System
-- [ ] UI primitives composing with `<slot>` pattern: Button, Modal, Toast
+- [x] UI primitives composing with `<slot>` pattern: Button, Modal, Toast
 - [ ] Dark mode via `@nuxtjs/color-mode`
 - [ ] i18n with `@nuxtjs/i18n` (en + fr example)
 - [ ] SSG vs SSR page-level config examples

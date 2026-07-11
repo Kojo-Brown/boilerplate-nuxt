@@ -1,5 +1,6 @@
 <template>
   <NuxtRouteAnnouncer />
+  <AppToastContainer />
   <NuxtPage />
 </template>
 
