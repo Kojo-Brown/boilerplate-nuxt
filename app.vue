@@ -1,7 +1,10 @@
 <template>
   <NuxtRouteAnnouncer />
   <ClientOnly>
-    <ColorModeToggle class="fixed right-4 top-4 z-50" />
+    <div class="fixed right-4 top-4 z-50 flex items-center gap-2">
+      <LanguageSwitcher />
+      <ColorModeToggle />
+    </div>
   </ClientOnly>
   <AppToastContainer />
   <NuxtPage />

@@ -1,0 +1,67 @@
+{
+  "common": {
+    "signOut": "Se déconnecter",
+    "language": "Langue",
+    "loading": "Chargement…",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "close": "Fermer"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "login": "Connexion",
+    "uiPrimitives": "Primitives UI",
+    "upload": "Téléchargement",
+    "dataPatterns": "Modèles de données"
+  },
+  "auth": {
+    "loginTitle": "Connectez-vous à votre compte",
+    "emailLabel": "Adresse e-mail",
+    "emailPlaceholder": "vous@exemple.com",
+    "passwordLabel": "Mot de passe",
+    "passwordPlaceholder": "••••••••",
+    "signInButton": "Se connecter",
+    "orContinueWith": "Ou continuer avec",
+    "signInWithGithub": "Se connecter avec GitHub",
+    "loginFailed": "Échec de la connexion. Veuillez réessayer.",
+    "githubFailed": "Échec de la connexion GitHub. Veuillez réessayer."
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "name": "Nom",
+    "email": "E-mail",
+    "provider": "Fournisseur",
+    "noEmail": "—"
+  },
+  "counter": {
+    "title": "Store Compteur",
+    "subtitle": "persisté dans localStorage",
+    "doubled": "Doublé : {value}",
+    "positive": "Positif : {value}",
+    "increment": "+1",
+    "decrement": "−1",
+    "reset": "Réinitialiser",
+    "lastUpdated": "Dernière mise à jour : {time}"
+  },
+  "preferences": {
+    "title": "Store Préférences",
+    "subtitle": "persisté dans localStorage",
+    "colorMode": "Mode de couleur",
+    "activeMode": "Actif : {mode}",
+    "preferenceMode": "Préférence : {pref}",
+    "sidebar": "Barre latérale",
+    "openSidebar": "Ouvrir la barre latérale",
+    "closeSidebar": "Fermer la barre latérale",
+    "language": "Langue",
+    "pageSize": "Taille de la page"
+  },
+  "upload": {
+    "title": "Téléchargement de fichiers",
+    "subtitle": "Téléchargements directs et présignés S3"
+  },
+  "uiPrimitives": {
+    "title": "Primitives UI",
+    "subtitle": "Bibliothèque de composants basée sur les slots : Bouton, Modal, Toast"
+  }
+}

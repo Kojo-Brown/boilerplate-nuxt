@@ -1,0 +1,67 @@
+{
+  "common": {
+    "signOut": "Sign out",
+    "language": "Language",
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "login": "Login",
+    "uiPrimitives": "UI Primitives",
+    "upload": "Upload",
+    "dataPatterns": "Data Patterns"
+  },
+  "auth": {
+    "loginTitle": "Sign in to your account",
+    "emailLabel": "Email address",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "••••••••",
+    "signInButton": "Sign in",
+    "orContinueWith": "Or continue with",
+    "signInWithGithub": "Sign in with GitHub",
+    "loginFailed": "Login failed. Please try again.",
+    "githubFailed": "GitHub sign-in failed. Please try again."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "name": "Name",
+    "email": "Email",
+    "provider": "Provider",
+    "noEmail": "—"
+  },
+  "counter": {
+    "title": "Counter Store",
+    "subtitle": "persisted to localStorage",
+    "doubled": "Doubled: {value}",
+    "positive": "Positive: {value}",
+    "increment": "+1",
+    "decrement": "−1",
+    "reset": "Reset",
+    "lastUpdated": "Last updated: {time}"
+  },
+  "preferences": {
+    "title": "Preferences Store",
+    "subtitle": "persisted to localStorage",
+    "colorMode": "Color mode",
+    "activeMode": "Active: {mode}",
+    "preferenceMode": "Preference: {pref}",
+    "sidebar": "Sidebar",
+    "openSidebar": "Open sidebar",
+    "closeSidebar": "Close sidebar",
+    "language": "Language",
+    "pageSize": "Page size"
+  },
+  "upload": {
+    "title": "File Upload",
+    "subtitle": "Direct and presigned S3 uploads"
+  },
+  "uiPrimitives": {
+    "title": "UI Primitives",
+    "subtitle": "Slot-based component library: Button, Modal, Toast"
+  }
+}

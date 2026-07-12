@@ -1,6 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
 
+const { t } = useI18n()
 const { fetch: refreshSession } = useUserSession()
 
 const email = ref('')
@@ -10,7 +11,7 @@ const loading = ref(false)
 
 const route = useRoute()
 const oauthError = computed(() =>
-  route.query['error'] === 'github_oauth_failed' ? 'GitHub sign-in failed. Please try again.' : '',
+  route.query['error'] === 'github_oauth_failed' ? t('auth.githubFailed') : '',
 )
 
 async function handleCredentialsLogin() {
@@ -25,7 +26,7 @@ async function handleCredentialsLogin() {
     await navigateTo('/')
   } catch (err: unknown) {
     const error = err as { data?: { message?: string } }
-    errorMessage.value = error.data?.message ?? 'Login failed. Please try again.'
+    errorMessage.value = error.data?.message ?? t('auth.loginFailed')
   } finally {
     loading.value = false
   }
@@ -36,10 +37,9 @@ async function handleCredentialsLogin() {
   <div class="flex min-h-screen items-center justify-center bg-[var(--color-background)] px-4">
     <div class="w-full max-w-md space-y-8">
       <div class="text-center">
-        <h1 class="text-3xl font-bold text-[var(--color-foreground)]">Sign in</h1>
-        <p class="mt-2 text-sm text-[var(--color-muted-foreground)]">
-          Use credentials or GitHub to continue
-        </p>
+        <h1 class="text-3xl font-bold text-[var(--color-foreground)]">
+          {{ t('auth.loginTitle') }}
+        </h1>
       </div>
 
       <div
@@ -52,7 +52,7 @@ async function handleCredentialsLogin() {
       <form class="space-y-5" @submit.prevent="handleCredentialsLogin">
         <div>
           <label for="email" class="block text-sm font-medium text-[var(--color-foreground)]">
-            Email
+            {{ t('auth.emailLabel') }}
           </label>
           <input
             id="email"
@@ -60,13 +60,14 @@ async function handleCredentialsLogin() {
             type="email"
             autocomplete="email"
             required
+            :placeholder="t('auth.emailPlaceholder')"
             class="mt-1 block w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[var(--color-foreground)] shadow-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
           />
         </div>
 
         <div>
           <label for="password" class="block text-sm font-medium text-[var(--color-foreground)]">
-            Password
+            {{ t('auth.passwordLabel') }}
           </label>
           <input
             id="password"
@@ -74,6 +75,7 @@ async function handleCredentialsLogin() {
             type="password"
             autocomplete="current-password"
             required
+            :placeholder="t('auth.passwordPlaceholder')"
             class="mt-1 block w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-[var(--color-foreground)] shadow-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
           />
         </div>
@@ -90,7 +92,7 @@ async function handleCredentialsLogin() {
           :disabled="loading"
           class="w-full rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2 disabled:opacity-50"
         >
-          {{ loading ? 'Signing in…' : 'Sign in' }}
+          {{ loading ? t('common.loading') : t('auth.signInButton') }}
         </button>
       </form>
 
@@ -100,7 +102,7 @@ async function handleCredentialsLogin() {
         </div>
         <div class="relative flex justify-center text-sm">
           <span class="bg-[var(--color-background)] px-2 text-[var(--color-muted-foreground)]">
-            Or continue with
+            {{ t('auth.orContinueWith') }}
           </span>
         </div>
       </div>
@@ -116,7 +118,7 @@ async function handleCredentialsLogin() {
             clip-rule="evenodd"
           />
         </svg>
-        GitHub
+        {{ t('auth.signInWithGithub') }}
       </a>
     </div>
   </div>
