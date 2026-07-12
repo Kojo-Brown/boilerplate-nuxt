@@ -1,6 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
 
+const { t } = useI18n()
 const { user, clear } = useUserSession()
 
 async function handleLogout() {
@@ -21,12 +22,14 @@ const { isDark, preference: colorPreference } = useAppColorMode()
         class="space-y-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6"
       >
         <div class="flex items-center justify-between">
-          <h1 class="text-2xl font-bold text-[var(--color-foreground)]">Dashboard</h1>
+          <h1 class="text-2xl font-bold text-[var(--color-foreground)]">
+            {{ t('dashboard.title') }}
+          </h1>
           <button
             class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
             @click="handleLogout"
           >
-            Sign out
+            {{ t('common.signOut') }}
           </button>
         </div>
 
@@ -45,13 +48,14 @@ const { isDark, preference: colorPreference } = useAppColorMode()
 
           <div class="space-y-2 text-sm">
             <p class="text-[var(--color-foreground)]">
-              <span class="font-medium">Name: </span>{{ user.name }}
+              <span class="font-medium">{{ t('dashboard.name') }}: </span>{{ user.name }}
             </p>
             <p class="text-[var(--color-foreground)]">
-              <span class="font-medium">Email: </span>{{ user.email || '—' }}
+              <span class="font-medium">{{ t('dashboard.email') }}: </span>
+              {{ user.email || t('dashboard.noEmail') }}
             </p>
             <p class="text-[var(--color-foreground)]">
-              <span class="font-medium">Provider: </span>
+              <span class="font-medium">{{ t('dashboard.provider') }}: </span>
               <span
                 class="ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
                 :class="
@@ -72,17 +76,17 @@ const { isDark, preference: colorPreference } = useAppColorMode()
         class="rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6 space-y-4"
       >
         <h2 class="text-lg font-semibold text-[var(--color-foreground)]">
-          Counter Store
+          {{ t('counter.title') }}
           <span class="ml-2 text-xs font-normal text-[var(--color-muted-foreground)]">
-            persisted to localStorage
+            {{ t('counter.subtitle') }}
           </span>
         </h2>
 
         <div class="flex items-center gap-4">
           <span class="text-4xl font-bold text-[var(--color-primary)]">{{ counter.count }}</span>
           <div class="space-y-1 text-sm text-[var(--color-muted-foreground)]">
-            <p>Doubled: {{ counter.doubled }}</p>
-            <p>Positive: {{ counter.isPositive }}</p>
+            <p>{{ t('counter.doubled', { value: counter.doubled }) }}</p>
+            <p>{{ t('counter.positive', { value: counter.isPositive }) }}</p>
           </div>
         </div>
 
@@ -91,24 +95,24 @@ const { isDark, preference: colorPreference } = useAppColorMode()
             class="rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90"
             @click="counter.increment()"
           >
-            +1
+            {{ t('counter.increment') }}
           </button>
           <button
             class="rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2 text-sm font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
             @click="counter.decrement()"
           >
-            −1
+            {{ t('counter.decrement') }}
           </button>
           <button
             class="rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2 text-sm font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
             @click="counter.reset()"
           >
-            Reset
+            {{ t('counter.reset') }}
           </button>
         </div>
 
         <p v-if="counter.lastUpdated" class="text-xs text-[var(--color-muted-foreground)]">
-          Last updated: {{ counter.lastUpdated }}
+          {{ t('counter.lastUpdated', { time: counter.lastUpdated }) }}
         </p>
       </div>
 
@@ -117,49 +121,49 @@ const { isDark, preference: colorPreference } = useAppColorMode()
         class="rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6 space-y-4"
       >
         <h2 class="text-lg font-semibold text-[var(--color-foreground)]">
-          Preferences Store
+          {{ t('preferences.title') }}
           <span class="ml-2 text-xs font-normal text-[var(--color-muted-foreground)]">
-            persisted to localStorage
+            {{ t('preferences.subtitle') }}
           </span>
         </h2>
 
         <div class="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <label class="block font-medium text-[var(--color-foreground)] mb-1">Color mode</label>
+            <label class="block font-medium text-[var(--color-foreground)] mb-1">
+              {{ t('preferences.colorMode') }}
+            </label>
             <div class="space-y-2">
               <ColorModeToggle variant="segmented" />
               <p class="text-xs text-[var(--color-muted-foreground)]">
-                Active: <span class="font-medium">{{ isDark ? 'dark' : 'light' }}</span>
-                · Preference: <span class="font-medium">{{ colorPreference }}</span>
+                {{ t('preferences.activeMode', { mode: isDark ? 'dark' : 'light' }) }}
+                · {{ t('preferences.preferenceMode', { pref: colorPreference }) }}
               </p>
             </div>
           </div>
 
           <div>
-            <label class="block font-medium text-[var(--color-foreground)] mb-1">Sidebar</label>
+            <label class="block font-medium text-[var(--color-foreground)] mb-1">
+              {{ t('preferences.sidebar') }}
+            </label>
             <button
               class="rounded px-3 py-1 text-xs font-medium border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)]"
               @click="preferences.toggleSidebar()"
             >
-              {{ preferences.isSidebarOpen ? 'Close sidebar' : 'Open sidebar' }}
+              {{ preferences.isSidebarOpen ? t('preferences.closeSidebar') : t('preferences.openSidebar') }}
             </button>
           </div>
 
           <div>
-            <label class="block font-medium text-[var(--color-foreground)] mb-1">Language</label>
-            <select
-              class="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs text-[var(--color-foreground)]"
-              :value="preferences.language"
-              @change="preferences.setLanguage(($event.target as HTMLSelectElement).value)"
-            >
-              <option value="en">English</option>
-              <option value="fr">Français</option>
-              <option value="es">Español</option>
-            </select>
+            <label class="block font-medium text-[var(--color-foreground)] mb-1">
+              {{ t('preferences.language') }}
+            </label>
+            <LanguageSwitcher />
           </div>
 
           <div>
-            <label class="block font-medium text-[var(--color-foreground)] mb-1">Page size</label>
+            <label class="block font-medium text-[var(--color-foreground)] mb-1">
+              {{ t('preferences.pageSize') }}
+            </label>
             <select
               class="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs text-[var(--color-foreground)]"
               :value="preferences.pageSize"
