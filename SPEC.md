@@ -24,7 +24,7 @@
 ## Phase 4 — UI System
 - [x] UI primitives composing with `<slot>` pattern: Button, Modal, Toast
 - [x] Dark mode via `@nuxtjs/color-mode`
-- [ ] i18n with `@nuxtjs/i18n` (en + fr example)
+- [x] i18n with `@nuxtjs/i18n` (en + fr example)
 - [ ] SSG vs SSR page-level config examples
 
 ## Phase 5 — Testing & DevOps
