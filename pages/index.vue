@@ -10,6 +10,7 @@ async function handleLogout() {
 
 const counter = useCounterStore()
 const preferences = usePreferencesStore()
+const { isDark, preference: colorPreference } = useAppColorMode()
 </script>
 
 <template>
@@ -125,20 +126,12 @@ const preferences = usePreferencesStore()
         <div class="grid grid-cols-2 gap-4 text-sm">
           <div>
             <label class="block font-medium text-[var(--color-foreground)] mb-1">Color mode</label>
-            <div class="flex gap-2">
-              <button
-                v-for="mode in ['light', 'dark', 'system'] as const"
-                :key="mode"
-                class="rounded px-3 py-1 text-xs font-medium border transition-colors"
-                :class="
-                  preferences.colorMode === mode
-                    ? 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] border-[var(--color-primary)]'
-                    : 'bg-[var(--color-background)] text-[var(--color-foreground)] border-[var(--color-border)]'
-                "
-                @click="preferences.setColorMode(mode)"
-              >
-                {{ mode }}
-              </button>
+            <div class="space-y-2">
+              <ColorModeToggle variant="segmented" />
+              <p class="text-xs text-[var(--color-muted-foreground)]">
+                Active: <span class="font-medium">{{ isDark ? 'dark' : 'light' }}</span>
+                · Preference: <span class="font-medium">{{ colorPreference }}</span>
+              </p>
             </div>
           </div>
 
