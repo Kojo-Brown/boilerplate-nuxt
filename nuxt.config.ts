@@ -2,6 +2,21 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-08',
 
+  /**
+   * Per-route rendering mode examples (see pages/rendering/).
+   *
+   * definePageMeta approach (co-located, preferred for prerender / ssr:false):
+   *   pages/rendering/ssg.vue → definePageMeta({ prerender: true })
+   *   pages/rendering/spa.vue → definePageMeta({ ssr: false })
+   *
+   * routeRules approach (required for swr / cache headers):
+   *   /rendering/ssr  — default SSR (no rule needed)
+   *   /rendering/isr  — stale-while-revalidate, 60 s TTL
+   */
+  routeRules: {
+    '/rendering/isr': { swr: 60 },
+  },
+
   modules: [
     'nuxt-auth-utils',
     '@pinia/nuxt',
