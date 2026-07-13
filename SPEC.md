@@ -28,7 +28,7 @@
 - [x] SSG vs SSR page-level config examples
 
 ## Phase 5 — Testing & DevOps
-- [ ] Vitest for unit/composable tests
+- [x] Vitest for unit/composable tests
 - [ ] Playwright E2E with `@nuxt/test-utils`
 - [ ] GitHub Actions: lint → typecheck → test → build
 - [ ] Dockerfile (Nuxt 4 output: node-server)
