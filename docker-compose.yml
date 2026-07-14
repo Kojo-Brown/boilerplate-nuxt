@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nuxt
+      POSTGRES_PASSWORD: nuxt
+      POSTGRES_DB: boilerplate_nuxt
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nuxt -d boilerplate_nuxt']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgresql://nuxt:nuxt@postgres:5432/boilerplate_nuxt
+      NUXT_SESSION_PASSWORD: ${NUXT_SESSION_PASSWORD:-change-me-in-production-minimum-32-chars}
+      NUXT_OAUTH_GITHUB_CLIENT_ID: ${NUXT_OAUTH_GITHUB_CLIENT_ID:-}
+      NUXT_OAUTH_GITHUB_CLIENT_SECRET: ${NUXT_OAUTH_GITHUB_CLIENT_SECRET:-}
+      NUXT_AWS_REGION: ${AWS_REGION:-us-east-1}
+      NUXT_AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      NUXT_AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      NUXT_S3_BUCKET: ${S3_BUCKET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
