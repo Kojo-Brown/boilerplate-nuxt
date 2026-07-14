@@ -29,6 +29,6 @@
 
 ## Phase 5 — Testing & DevOps
 - [x] Vitest for unit/composable tests
-- [ ] Playwright E2E with `@nuxt/test-utils`
+- [x] Playwright E2E with `@nuxt/test-utils`
 - [ ] GitHub Actions: lint → typecheck → test → build
 - [ ] Dockerfile (Nuxt 4 output: node-server)
