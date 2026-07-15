@@ -24,8 +24,8 @@ services:
     ports:
       - '3000:3000'
     environment:
-      DATABASE_URL: postgresql://nuxt:nuxt@postgres:5432/boilerplate_nuxt
-      NUXT_SESSION_PASSWORD: ${NUXT_SESSION_PASSWORD:-change-me-in-production-minimum-32-chars}
+      NUXT_DATABASE_URL: postgresql://nuxt:nuxt@postgres:5432/boilerplate_nuxt
+      NUXT_SESSION_PASSWORD: ${NUXT_SESSION_PASSWORD:?Set NUXT_SESSION_PASSWORD (min 32 chars) in your .env file}
       NUXT_OAUTH_GITHUB_CLIENT_ID: ${NUXT_OAUTH_GITHUB_CLIENT_ID:-}
       NUXT_OAUTH_GITHUB_CLIENT_SECRET: ${NUXT_OAUTH_GITHUB_CLIENT_SECRET:-}
       NUXT_AWS_REGION: ${AWS_REGION:-us-east-1}

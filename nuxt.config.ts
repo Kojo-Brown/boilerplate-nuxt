@@ -59,11 +59,14 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
-    databaseUrl: process.env['DATABASE_URL'] ?? '',
-    awsRegion: process.env['AWS_REGION'] ?? 'us-east-1',
-    awsAccessKeyId: process.env['AWS_ACCESS_KEY_ID'] ?? '',
-    awsSecretAccessKey: process.env['AWS_SECRET_ACCESS_KEY'] ?? '',
-    s3Bucket: process.env['S3_BUCKET'] ?? '',
+    // Defaults only — never read process.env here; doing so bakes the value
+    // into the Nitro bundle at build time. Override at runtime via NUXT_* env
+    // vars (e.g. NUXT_DATABASE_URL, NUXT_AWS_SECRET_ACCESS_KEY).
+    databaseUrl: '',
+    awsRegion: 'us-east-1',
+    awsAccessKeyId: '',
+    awsSecretAccessKey: '',
+    s3Bucket: '',
     session: {
       maxAge: 60 * 60 * 24 * 7,
     },
