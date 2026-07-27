@@ -1,0 +1,15 @@
+node_modules
+.nuxt
+.output
+.data
+dist
+coverage
+playwright-report
+test-results
+.env
+.env.local
+*.log
+*.tsbuildinfo
+
+# macOS
+.DS_Store
