@@ -32,7 +32,16 @@ const {
   data: postsPage,
   status: postsStatus,
   refresh: refreshPosts,
-} = useAsyncData<PaginatedResponse<{ id: string; title: string; body: string; authorId: string; createdAt: string; updatedAt: string }>>(
+} = useAsyncData<
+  PaginatedResponse<{
+    id: string
+    title: string
+    body: string
+    authorId: string
+    createdAt: string
+    updatedAt: string
+  }>
+>(
   // Key includes reactive state → changes to `page` trigger a new fetch
   () => `posts-page-${page.value}-limit-${limit.value}`,
   () => $fetch('/api/posts', { params: { page: page.value, limit: limit.value } }),
@@ -49,9 +58,9 @@ const {
   status: sharedStatus,
   refresh: refreshShared,
 } = useAsyncData(
-  'shared-post-1',                          // same key used in both panels below
+  'shared-post-1', // same key used in both panels below
   () => $fetch('/api/posts/post-1'),
-  { dedupe: 'defer' },                      // defer: re-use the in-flight request
+  { dedupe: 'defer' }, // defer: re-use the in-flight request
 )
 
 // Simulate a second consumer with the identical key — returns the same ref
@@ -60,6 +69,16 @@ const { data: sharedPostConsumer2 } = useAsyncData(
   () => $fetch('/api/posts/post-1'),
   { dedupe: 'defer' },
 )
+
+/**
+ * Extracted rather than written inline: Vue only treats an inline handler as a
+ * statement block when it can see a `;`, and Prettier is configured with
+ * `semi: false`, so a two-statement inline handler stops parsing after a reformat.
+ */
+function onPageSizeChange(event: Event) {
+  limit.value = Number((event.target as HTMLSelectElement).value)
+  page.value = 1
+}
 
 const dedupeLog = ref<string[]>([])
 
@@ -89,10 +108,10 @@ async function triggerDedupe() {
 
       <!-- ── 1. POLLING ── -->
       <section class="rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6">
-        <div class="flex items-center justify-between mb-4">
+        <div class="mb-4 flex items-center justify-between">
           <div>
             <h2 class="text-lg font-semibold text-[var(--color-foreground)]">1 · Polling</h2>
-            <p class="text-xs text-[var(--color-muted-foreground)] mt-0.5">
+            <p class="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
               Auto-refreshes every 5 s; pauses when the tab is hidden.
             </p>
           </div>
@@ -100,11 +119,15 @@ async function triggerDedupe() {
           <div class="flex items-center gap-2">
             <span
               class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
-              :class="isPolling ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'"
+              :class="
+                isPolling
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+              "
             >
               <span
                 class="h-1.5 w-1.5 rounded-full"
-                :class="isPolling ? 'bg-green-500 animate-pulse' : 'bg-gray-400'"
+                :class="isPolling ? 'animate-pulse bg-green-500' : 'bg-gray-400'"
               />
               {{ isPolling ? 'Polling' : 'Paused' }}
             </span>
@@ -126,7 +149,10 @@ async function triggerDedupe() {
           </div>
         </div>
 
-        <div v-if="metricsStatus === 'pending' && !metrics" class="text-sm text-[var(--color-muted-foreground)]">
+        <div
+          v-if="metricsStatus === 'pending' && !metrics"
+          class="text-sm text-[var(--color-muted-foreground)]"
+        >
           Loading…
         </div>
 
@@ -139,7 +165,7 @@ async function triggerDedupe() {
               ['Fetched at', new Date(metrics.timestamp).toLocaleTimeString()],
             ]"
             :key="String(label)"
-            class="rounded-lg bg-[var(--color-background)] p-3 border border-[var(--color-border)]"
+            class="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3"
           >
             <p class="text-xs text-[var(--color-muted-foreground)]">{{ label }}</p>
             <p class="mt-1 text-lg font-semibold text-[var(--color-foreground)]">{{ value }}</p>
@@ -149,12 +175,12 @@ async function triggerDedupe() {
 
       <!-- ── 2. REFRESH (reactive key) ── -->
       <section class="rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6">
-        <div class="flex items-start justify-between mb-4">
+        <div class="mb-4 flex items-start justify-between">
           <div>
             <h2 class="text-lg font-semibold text-[var(--color-foreground)]">2 · Refresh</h2>
-            <p class="text-xs text-[var(--color-muted-foreground)] mt-0.5">
-              Reactive key: changing the page triggers a new fetch automatically.
-              Manual button calls <code class="font-mono">refresh()</code>.
+            <p class="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
+              Reactive key: changing the page triggers a new fetch automatically. Manual button
+              calls <code class="font-mono">refresh()</code>.
             </p>
           </div>
 
@@ -168,12 +194,12 @@ async function triggerDedupe() {
         </div>
 
         <!-- Pagination controls -->
-        <div class="flex items-center gap-3 mb-4">
+        <div class="mb-4 flex items-center gap-3">
           <label class="text-xs text-[var(--color-muted-foreground)]">Page size</label>
           <select
             class="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs text-[var(--color-foreground)]"
             :value="limit"
-            @change="limit = Number(($event.target as HTMLSelectElement).value); page = 1"
+            @change="onPageSizeChange"
           >
             <option value="3">3</option>
             <option value="5">5</option>
@@ -204,11 +230,7 @@ async function triggerDedupe() {
         </div>
 
         <ul v-else-if="postsPage" class="divide-y divide-[var(--color-border)]">
-          <li
-            v-for="post in postsPage.data"
-            :key="post.id"
-            class="py-2 text-sm"
-          >
+          <li v-for="post in postsPage.data" :key="post.id" class="py-2 text-sm">
             <span class="font-medium text-[var(--color-foreground)]">{{ post.title }}</span>
             <span class="ml-2 text-xs text-[var(--color-muted-foreground)]">{{ post.id }}</span>
           </li>
@@ -223,31 +245,54 @@ async function triggerDedupe() {
       <section class="rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6">
         <div class="mb-4">
           <h2 class="text-lg font-semibold text-[var(--color-foreground)]">3 · Dedupe</h2>
-          <p class="text-xs text-[var(--color-muted-foreground)] mt-0.5">
+          <p class="mt-0.5 text-xs text-[var(--color-muted-foreground)]">
             Two components share the key <code class="font-mono">shared-post-1</code>.
-            <code class="font-mono">dedupe: 'defer'</code> means a second refresh that
-            arrives while the first is in-flight is dropped — only one request is made.
+            <code class="font-mono">dedupe: 'defer'</code> means a second refresh that arrives while
+            the first is in-flight is dropped — only one request is made.
           </p>
         </div>
 
-        <div class="grid grid-cols-2 gap-4 mb-4">
+        <div class="mb-4 grid grid-cols-2 gap-4">
           <!-- Consumer A -->
-          <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3">
-            <p class="text-xs font-semibold text-[var(--color-muted-foreground)] mb-2">Consumer A</p>
-            <div v-if="sharedStatus === 'pending'" class="text-xs text-[var(--color-muted-foreground)]">Loading…</div>
+          <div
+            class="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3"
+          >
+            <p class="mb-2 text-xs font-semibold text-[var(--color-muted-foreground)]">
+              Consumer A
+            </p>
+            <div
+              v-if="sharedStatus === 'pending'"
+              class="text-xs text-[var(--color-muted-foreground)]"
+            >
+              Loading…
+            </div>
             <div v-else-if="sharedPost">
-              <p class="text-sm font-medium text-[var(--color-foreground)]">{{ (sharedPost as { data: { title: string } }).data.title }}</p>
-              <p class="text-xs text-[var(--color-muted-foreground)]">{{ (sharedPost as { data: { id: string } }).data.id }}</p>
+              <p class="text-sm font-medium text-[var(--color-foreground)]">
+                {{ (sharedPost as { data: { title: string } }).data.title }}
+              </p>
+              <p class="text-xs text-[var(--color-muted-foreground)]">
+                {{ (sharedPost as { data: { id: string } }).data.id }}
+              </p>
             </div>
           </div>
 
           <!-- Consumer B — same key, same data ref, zero extra requests -->
-          <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3">
-            <p class="text-xs font-semibold text-[var(--color-muted-foreground)] mb-2">Consumer B (same key)</p>
-            <div v-if="!sharedPostConsumer2" class="text-xs text-[var(--color-muted-foreground)]">Loading…</div>
+          <div
+            class="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3"
+          >
+            <p class="mb-2 text-xs font-semibold text-[var(--color-muted-foreground)]">
+              Consumer B (same key)
+            </p>
+            <div v-if="!sharedPostConsumer2" class="text-xs text-[var(--color-muted-foreground)]">
+              Loading…
+            </div>
             <div v-else>
-              <p class="text-sm font-medium text-[var(--color-foreground)]">{{ (sharedPostConsumer2 as { data: { title: string } }).data.title }}</p>
-              <p class="text-xs text-[var(--color-muted-foreground)]">{{ (sharedPostConsumer2 as { data: { id: string } }).data.id }}</p>
+              <p class="text-sm font-medium text-[var(--color-foreground)]">
+                {{ (sharedPostConsumer2 as { data: { title: string } }).data.title }}
+              </p>
+              <p class="text-xs text-[var(--color-muted-foreground)]">
+                {{ (sharedPostConsumer2 as { data: { id: string } }).data.id }}
+              </p>
             </div>
           </div>
         </div>
@@ -263,7 +308,7 @@ async function triggerDedupe() {
           <li
             v-for="(entry, i) in dedupeLog"
             :key="i"
-            class="text-xs text-[var(--color-muted-foreground)] font-mono"
+            class="font-mono text-xs text-[var(--color-muted-foreground)]"
           >
             {{ entry }}
           </li>

@@ -12,9 +12,9 @@ test.describe('Login form validation', () => {
     // HTML required attribute prevents form submission; page stays on /login
     await expect(page).toHaveURL('/login')
     // email input should show browser validation state
-    const emailValidity = await page.locator('#email').evaluate(
-      (el) => (el as HTMLInputElement).validity.valueMissing,
-    )
+    const emailValidity = await page
+      .locator('#email')
+      .evaluate((el) => (el as HTMLInputElement).validity.valueMissing)
     expect(emailValidity).toBe(true)
   })
 
@@ -23,9 +23,9 @@ test.describe('Login form validation', () => {
     await page.locator('button[type="submit"]').click()
 
     await expect(page).toHaveURL('/login')
-    const passwordValidity = await page.locator('#password').evaluate(
-      (el) => (el as HTMLInputElement).validity.valueMissing,
-    )
+    const passwordValidity = await page
+      .locator('#password')
+      .evaluate((el) => (el as HTMLInputElement).validity.valueMissing)
     expect(passwordValidity).toBe(true)
   })
 
@@ -35,9 +35,9 @@ test.describe('Login form validation', () => {
     await page.locator('button[type="submit"]').click()
 
     await expect(page).toHaveURL('/login')
-    const emailTypeMismatch = await page.locator('#email').evaluate(
-      (el) => (el as HTMLInputElement).validity.typeMismatch,
-    )
+    const emailTypeMismatch = await page
+      .locator('#email')
+      .evaluate((el) => (el as HTMLInputElement).validity.typeMismatch)
     expect(emailTypeMismatch).toBe(true)
   })
 

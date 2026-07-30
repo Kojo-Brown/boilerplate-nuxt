@@ -1,12 +1,16 @@
 <script setup lang="ts">
 interface Props {
   modelValue: boolean
-  title?: string
+  // `| undefined` is required for the `title: undefined` default below to
+  // typecheck under exactOptionalPropertyTypes.
+  title?: string | undefined
   size?: 'sm' | 'md' | 'lg' | 'xl'
   closeOnBackdrop?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  // Explicitly undefined: an absent title renders no heading (see v-if below).
+  title: undefined,
   size: 'md',
   closeOnBackdrop: true,
 })
@@ -82,15 +86,12 @@ const sizeClasses: Record<NonNullable<Props['size']>, string> = {
                 v-if="title"
                 class="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4"
               >
-                <h2
-                  id="modal-title"
-                  class="text-lg font-semibold text-[var(--color-foreground)]"
-                >
+                <h2 id="modal-title" class="text-lg font-semibold text-[var(--color-foreground)]">
                   {{ title }}
                 </h2>
                 <button
                   type="button"
-                  class="rounded-md p-1 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                  class="rounded-md p-1 text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)] focus:ring-2 focus:ring-[var(--color-primary)] focus:outline-none"
                   aria-label="Close modal"
                   @click="close"
                 >

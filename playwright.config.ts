@@ -7,7 +7,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env['CI'],
   retries: process.env['CI'] ? 2 : 0,
-  workers: process.env['CI'] ? 1 : undefined,
+  // Omit the key entirely off CI (Playwright's default is a worker pool sized to
+  // the machine); exactOptionalPropertyTypes rejects an explicit `undefined`.
+  ...(process.env['CI'] ? { workers: 1 } : {}),
   reporter: process.env['CI'] ? 'github' : 'html',
   use: {
     baseURL: BASE_URL,

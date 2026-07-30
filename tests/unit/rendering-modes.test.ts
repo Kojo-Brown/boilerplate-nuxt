@@ -13,9 +13,7 @@ import { describe, it, expect } from 'vitest'
 
 describe('server/api/rendering/info', () => {
   it('returns a timestamp string', async () => {
-    const { default: handler } = await import(
-      '../../server/api/rendering/info.get'
-    )
+    const { default: handler } = await import('../../server/api/rendering/info.get')
 
     const result = await handler({} as Parameters<typeof handler>[0])
 
@@ -24,9 +22,7 @@ describe('server/api/rendering/info', () => {
   })
 
   it('returns a random number between 0 and 1', async () => {
-    const { default: handler } = await import(
-      '../../server/api/rendering/info.get'
-    )
+    const { default: handler } = await import('../../server/api/rendering/info.get')
 
     const result = await handler({} as Parameters<typeof handler>[0])
 
@@ -36,9 +32,7 @@ describe('server/api/rendering/info', () => {
   })
 
   it('returns mode === "SSR"', async () => {
-    const { default: handler } = await import(
-      '../../server/api/rendering/info.get'
-    )
+    const { default: handler } = await import('../../server/api/rendering/info.get')
 
     const result = await handler({} as Parameters<typeof handler>[0])
 
@@ -46,9 +40,7 @@ describe('server/api/rendering/info', () => {
   })
 
   it('returns a different random value on each call', async () => {
-    const { default: handler } = await import(
-      '../../server/api/rendering/info.get'
-    )
+    const { default: handler } = await import('../../server/api/rendering/info.get')
 
     const a = await handler({} as Parameters<typeof handler>[0])
     const b = await handler({} as Parameters<typeof handler>[0])

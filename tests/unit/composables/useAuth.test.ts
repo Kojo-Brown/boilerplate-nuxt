@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref, computed } from 'vue'
 
+// Static import is safe: the composable body only runs when useAuth() is called,
+// so the global stubs above are in place before any reference is resolved.
+import { useAuth } from '../../../composables/useAuth'
+
 // Nuxt auto-imports are unavailable in the node test environment.
 // Stub them on globalThis before each test so the composable can resolve them.
 
@@ -10,7 +14,9 @@ const mockNavigateTo = vi.fn()
 const mockFetch = vi.fn()
 
 function makeMockSession(loggedIn = false) {
-  const user = ref(loggedIn ? { id: '1', email: 'a@b.com', name: 'Test', provider: 'credentials' as const } : null)
+  const user = ref(
+    loggedIn ? { id: '1', email: 'a@b.com', name: 'Test', provider: 'credentials' as const } : null,
+  )
   return {
     user,
     loggedIn: computed(() => user.value !== null),
@@ -22,10 +28,6 @@ function makeMockSession(loggedIn = false) {
 vi.stubGlobal('useUserSession', () => makeMockSession())
 vi.stubGlobal('navigateTo', mockNavigateTo)
 vi.stubGlobal('$fetch', mockFetch)
-
-// Static import is safe: the composable body only runs when useAuth() is called,
-// so the global stubs above are in place before any reference is resolved.
-import { useAuth } from '../../../composables/useAuth'
 
 describe('useAuth', () => {
   beforeEach(() => {

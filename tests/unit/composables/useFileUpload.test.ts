@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+import { useFileUpload } from '../../../composables/useFileUpload'
+
 const mockFetch = vi.fn()
 vi.stubGlobal('$fetch', mockFetch)
 vi.stubGlobal('useAsyncData', vi.fn())
 vi.stubGlobal('reactive', (v: object) => v)
 vi.stubGlobal('readonly', (v: object) => v)
 vi.stubGlobal('ref', (v: unknown) => ({ value: v }))
-
-import { useFileUpload } from '../../../composables/useFileUpload'
 
 const makeFile = (name = 'test.jpg', type = 'image/jpeg', size = 1024): File => {
   const blob = new Blob(['x'.repeat(size)], { type })
@@ -57,7 +57,7 @@ describe('useFileUpload', () => {
 
     mockFetch
       .mockResolvedValueOnce(presignResponse) // presign
-      .mockResolvedValueOnce(undefined)       // S3 PUT
+      .mockResolvedValueOnce(undefined) // S3 PUT
       .mockResolvedValueOnce(confirmResponse) // confirm
 
     const { state, uploadFile } = useFileUpload()
@@ -99,7 +99,12 @@ describe('useFileUpload', () => {
   it('reset() clears all state', async () => {
     mockFetch.mockRejectedValueOnce(new Error('fail'))
     const { state, uploadFile, reset } = useFileUpload()
-    try { await uploadFile(makeFile()) } catch {}
+    try {
+      await uploadFile(makeFile())
+    } catch {
+      // Expected — the rejection is asserted in its own test. This case only
+      // needs the failed-upload state so it can verify reset() clears it.
+    }
 
     reset()
 

@@ -17,7 +17,9 @@ export type AllowedContentType = (typeof ALLOWED_CONTENT_TYPES)[number]
 export const presignRequestSchema = z.object({
   filename: z.string().min(1, 'Filename is required').max(255),
   contentType: z.enum(ALLOWED_CONTENT_TYPES, {
-    errorMap: () => ({ message: `Content type must be one of: ${ALLOWED_CONTENT_TYPES.join(', ')}` }),
+    errorMap: () => ({
+      message: `Content type must be one of: ${ALLOWED_CONTENT_TYPES.join(', ')}`,
+    }),
   }),
   size: z
     .number()

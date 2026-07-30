@@ -18,7 +18,7 @@
   "auth": {
     "loginTitle": "Connectez-vous à votre compte",
     "emailLabel": "Adresse e-mail",
-    "emailPlaceholder": "vous@exemple.com",
+    "emailPlaceholder": "vous{'@'}exemple.com",
     "passwordLabel": "Mot de passe",
     "passwordPlaceholder": "••••••••",
     "signInButton": "Se connecter",

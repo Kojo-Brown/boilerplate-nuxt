@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { computed, ref } from 'vue'
 
-// defineNuxtRouteMiddleware is an identity wrapper — stub it before importing
-// so the default export resolves to the raw handler function.
+import authMiddleware from '../../../middleware/auth.global'
+
+// `defineNuxtRouteMiddleware` runs when the middleware module is evaluated, which
+// happens before any statement in this file — it is stubbed in tests/setup.ts.
+// `navigateTo` is only called at handler-invocation time, so stubbing it here is fine.
 const mockNavigateTo = vi.fn()
 
-vi.stubGlobal('defineNuxtRouteMiddleware', (fn: unknown) => fn)
 vi.stubGlobal('navigateTo', mockNavigateTo)
 
 type MockUser = { id: string; email: string; name: string; provider: 'credentials' | 'github' }
@@ -23,10 +25,6 @@ function makeSession(authenticated: boolean) {
     clear: vi.fn(),
   }
 }
-
-// Import AFTER stubs so defineNuxtRouteMiddleware is already globalThis when
-// the module is evaluated and calls defineNuxtRouteMiddleware(handler).
-import authMiddleware from '../../../middleware/auth.global'
 
 type RouteMiddlewareFn = (
   to: { path: string },

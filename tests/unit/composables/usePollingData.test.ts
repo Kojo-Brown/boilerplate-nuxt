@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
+// ── Module under test ─────────────────────────────────────────────────────────
+
+import { usePollingData } from '../../../composables/usePollingData'
+
 // ── Nuxt / Vue auto-import stubs ──────────────────────────────────────────────
 
 const mockRefresh = vi.fn().mockResolvedValue(undefined)
@@ -12,15 +16,14 @@ const mockAsyncData = {
   clear: vi.fn(),
 }
 
-vi.stubGlobal('useAsyncData', vi.fn(() => mockAsyncData))
+vi.stubGlobal(
+  'useAsyncData',
+  vi.fn(() => mockAsyncData),
+)
 vi.stubGlobal('ref', (v: unknown) => ({ value: v }))
 vi.stubGlobal('readonly', (r: unknown) => r)
 vi.stubGlobal('onMounted', vi.fn())
 vi.stubGlobal('onUnmounted', vi.fn())
-
-// ── Module under test ─────────────────────────────────────────────────────────
-
-import { usePollingData } from '../../../composables/usePollingData'
 
 describe('usePollingData', () => {
   beforeEach(() => {
@@ -28,7 +31,10 @@ describe('usePollingData', () => {
     vi.clearAllMocks()
 
     // Reset stubs so they capture fresh calls this test
-    vi.stubGlobal('useAsyncData', vi.fn(() => mockAsyncData))
+    vi.stubGlobal(
+      'useAsyncData',
+      vi.fn(() => mockAsyncData),
+    )
     vi.stubGlobal('onMounted', vi.fn())
     vi.stubGlobal('onUnmounted', vi.fn())
   })
@@ -90,12 +96,10 @@ describe('usePollingData', () => {
       startPolling()
       expect(mockRefresh).not.toHaveBeenCalled()
 
-      vi.advanceTimersByTime(1_000)
-      await vi.runAllTimersAsync()
+      await vi.advanceTimersByTimeAsync(1_000)
       expect(mockRefresh).toHaveBeenCalledTimes(1)
 
-      vi.advanceTimersByTime(1_000)
-      await vi.runAllTimersAsync()
+      await vi.advanceTimersByTimeAsync(1_000)
       expect(mockRefresh).toHaveBeenCalledTimes(2)
     })
 
@@ -104,13 +108,11 @@ describe('usePollingData', () => {
       const { startPolling, stopPolling } = usePollingData('k', fetcher, { interval: 500 })
 
       startPolling()
-      vi.advanceTimersByTime(500)
-      await vi.runAllTimersAsync()
+      await vi.advanceTimersByTimeAsync(500)
       expect(mockRefresh).toHaveBeenCalledTimes(1)
 
       stopPolling()
-      vi.advanceTimersByTime(2_000)
-      await vi.runAllTimersAsync()
+      await vi.advanceTimersByTimeAsync(2_000)
       expect(mockRefresh).toHaveBeenCalledTimes(1)
     })
 
@@ -120,8 +122,7 @@ describe('usePollingData', () => {
 
       startPolling()
       startPolling() // should clear the first interval
-      vi.advanceTimersByTime(1_000)
-      await vi.runAllTimersAsync()
+      await vi.advanceTimersByTimeAsync(1_000)
       expect(mockRefresh).toHaveBeenCalledTimes(1)
     })
 
@@ -142,12 +143,10 @@ describe('usePollingData', () => {
       const { startPolling } = usePollingData('k', fetcher)
 
       startPolling()
-      vi.advanceTimersByTime(9_999)
-      await vi.runAllTimersAsync()
+      await vi.advanceTimersByTimeAsync(9_999)
       expect(mockRefresh).not.toHaveBeenCalled()
 
-      vi.advanceTimersByTime(1)
-      await vi.runAllTimersAsync()
+      await vi.advanceTimersByTimeAsync(1)
       expect(mockRefresh).toHaveBeenCalledTimes(1)
     })
   })

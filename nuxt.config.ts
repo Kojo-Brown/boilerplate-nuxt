@@ -1,3 +1,5 @@
+import tailwindcss from '@tailwindcss/vite'
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-08',
@@ -17,13 +19,16 @@ export default defineNuxtConfig({
     '/rendering/isr': { swr: 60 },
   },
 
-  modules: [
-    'nuxt-auth-utils',
-    '@pinia/nuxt',
-    '@nuxtjs/tailwindcss',
-    '@nuxtjs/color-mode',
-    '@nuxtjs/i18n',
-  ],
+  modules: ['@nuxt/eslint', 'nuxt-auth-utils', '@pinia/nuxt', '@nuxtjs/color-mode', '@nuxtjs/i18n'],
+
+  // Tailwind 4 ships its own Vite plugin. @nuxtjs/tailwindcss is a Tailwind 3
+  // module — it registers `tailwindcss` as a PostCSS plugin, which Tailwind 4
+  // rejects outright, so the plugin is wired directly instead.
+  css: ['~/assets/css/tailwind.css'],
+
+  vite: {
+    plugins: [tailwindcss()],
+  },
 
   i18n: {
     locales: [
@@ -31,7 +36,6 @@ export default defineNuxtConfig({
       { code: 'fr', language: 'fr-FR', name: 'Français', file: 'fr.json' },
     ],
     defaultLocale: 'en',
-    lazy: true,
     langDir: 'locales/',
     strategy: 'prefix_except_default',
     detectBrowserLanguage: {
@@ -68,6 +72,10 @@ export default defineNuxtConfig({
     awsSecretAccessKey: '',
     s3Bucket: '',
     session: {
+      // Placeholder only — nuxt-auth-utils requires the key to be present in the
+      // schema. The real value comes from NUXT_SESSION_PASSWORD at runtime and
+      // the server refuses to start without it.
+      password: '',
       maxAge: 60 * 60 * 24 * 7,
     },
   },

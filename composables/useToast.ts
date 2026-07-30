@@ -8,9 +8,12 @@ export interface Toast {
 }
 
 export interface ToastOptions {
-  type?: Toast['type']
+  // `| undefined` is required under exactOptionalPropertyTypes: the convenience
+  // helpers below forward an optional argument straight through, so the property
+  // may be present-but-undefined, not merely absent.
+  type?: Toast['type'] | undefined
   message: string
-  duration?: number
+  duration?: number | undefined
 }
 
 const toasts = ref<Toast[]>([])
@@ -42,11 +45,9 @@ export function useToast() {
     removeToast,
     success: (message: string, duration?: number) =>
       addToast({ type: 'success', message, duration }),
-    error: (message: string, duration?: number) =>
-      addToast({ type: 'error', message, duration }),
+    error: (message: string, duration?: number) => addToast({ type: 'error', message, duration }),
     warning: (message: string, duration?: number) =>
       addToast({ type: 'warning', message, duration }),
-    info: (message: string, duration?: number) =>
-      addToast({ type: 'info', message, duration }),
+    info: (message: string, duration?: number) => addToast({ type: 'info', message, duration }),
   }
 }

@@ -101,9 +101,7 @@ const showConfirmModal = ref(false)
     <!-- Custom-slotted modal -->
     <AppModal v-model="showSlottedModal" size="lg">
       <template #header>
-        <div
-          class="flex items-center gap-3 border-b border-[var(--color-border)] px-6 py-4"
-        >
+        <div class="flex items-center gap-3 border-b border-[var(--color-border)] px-6 py-4">
           <div
             class="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-primary)] text-lg text-[var(--color-primary-foreground)]"
           >
@@ -120,8 +118,8 @@ const showConfirmModal = ref(false)
       <p class="text-[var(--color-foreground)]">
         The <code class="rounded bg-[var(--color-muted)] px-1 py-0.5 text-sm">header</code>,
         <code class="rounded bg-[var(--color-muted)] px-1 py-0.5 text-sm">default</code>, and
-        <code class="rounded bg-[var(--color-muted)] px-1 py-0.5 text-sm">footer</code> slots
-        are all independently replaceable.
+        <code class="rounded bg-[var(--color-muted)] px-1 py-0.5 text-sm">footer</code> slots are
+        all independently replaceable.
       </p>
       <template #footer>
         <div class="flex justify-end px-6 py-4">
@@ -137,9 +135,7 @@ const showConfirmModal = ref(false)
       size="sm"
       :close-on-backdrop="false"
     >
-      <p class="text-[var(--color-foreground)]">
-        Are you sure? This action cannot be undone.
-      </p>
+      <p class="text-[var(--color-foreground)]">Are you sure? This action cannot be undone.</p>
       <template #footer>
         <div class="flex gap-2 border-t border-[var(--color-border)] px-6 py-4">
           <AppButton variant="outline" full-width @click="showConfirmModal = false">
@@ -148,7 +144,12 @@ const showConfirmModal = ref(false)
           <AppButton
             variant="danger"
             full-width
-            @click="() => { showConfirmModal = false; error('Item deleted.') }"
+            @click="
+              () => {
+                showConfirmModal = false
+                error('Item deleted.')
+              }
+            "
           >
             Delete
           </AppButton>

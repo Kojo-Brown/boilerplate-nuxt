@@ -6,16 +6,16 @@ Full-stack Nuxt starter with server-side rendering, auth, and a database-first a
 
 ## Stack
 
-| Layer | Tech |
-|-------|------|
-| Framework | Nuxt 4.4 |
-| Language | TypeScript 6 |
-| Styles | TailwindCSS 4 |
-| State | Pinia |
-| Database | Drizzle ORM + PostgreSQL |
-| Auth | nuxt-auth-utils |
-| i18n | @nuxtjs/i18n |
-| Testing | Vitest + Playwright |
+| Layer     | Tech                     |
+| --------- | ------------------------ |
+| Framework | Nuxt 4.4                 |
+| Language  | TypeScript 6             |
+| Styles    | TailwindCSS 4            |
+| State     | Pinia                    |
+| Database  | Drizzle ORM + PostgreSQL |
+| Auth      | nuxt-auth-utils          |
+| i18n      | @nuxtjs/i18n             |
+| Testing   | Vitest + Playwright      |
 
 ## Quick Start
 
@@ -28,4 +28,5 @@ pnpm dev  # http://localhost:3000
 ```
 
 ## Spec Progress
+
 See [SPEC.md](./SPEC.md).

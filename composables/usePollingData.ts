@@ -1,5 +1,3 @@
-import type { AsyncData, NuxtError } from 'nuxt/app'
-
 export interface PollingOptions {
   /** Polling interval in milliseconds. Default: 10_000 (10 s) */
   interval?: number
@@ -16,8 +14,6 @@ export interface PollingControls {
   isPolling: Ref<boolean>
 }
 
-export type PollingData<T> = AsyncData<T | null, NuxtError> & PollingControls
-
 /**
  * Wraps `useAsyncData` with an automatic polling loop.
  *
@@ -30,7 +26,7 @@ export function usePollingData<T>(
   key: string,
   fetcher: () => Promise<T>,
   options: PollingOptions = {},
-): PollingData<T> {
+) {
   const { interval = 10_000, pauseOnHidden = true, immediate = true } = options
 
   const asyncData = useAsyncData<T>(key, fetcher, { immediate })
@@ -87,3 +83,13 @@ export function usePollingData<T>(
     isPolling: readonly(isPolling) as Ref<boolean>,
   }
 }
+
+/**
+ * Return type of {@link usePollingData}.
+ *
+ * Derived from the function rather than spelled out as
+ * `AsyncData<T | null, NuxtError>`: for a call without a `default`, Nuxt
+ * resolves the data ref to `PickFrom<T, KeysOf<T>> | undefined` — not
+ * `T | null` — so a hand-written alias drifts from the real signature.
+ */
+export type PollingData<T> = ReturnType<typeof usePollingData<T>>
