@@ -4,10 +4,15 @@
 
 ## Phase 0 — Green Baseline (blocks all feature work)
 
-- [ ] Verify every dependency version actually exists on the registry and fix the ones that do not, then commit a lockfile
-- [ ] Get `install`, `typecheck`, `lint`, `test`, and `build` all passing locally from a clean clone
-- [ ] Promote `workflow-templates/ci.yml` to `.github/workflows/ci.yml` and confirm it runs green on a PR
+- [x] Verify every dependency version actually exists on the registry and fix the ones that do not, then commit a lockfile
+- [x] Get `install`, `typecheck`, `lint`, `test`, and `build` all passing locally from a clean clone
+- [x] Promote `workflow-templates/ci.yml` to `.github/workflows/ci.yml` and confirm it runs green on a PR
 - [ ] Add a CI job matrix covering the supported Node version and fail the build on any warning
+
+Phase 0 items 1-3 complete as of PR #19 (2026-07-30): install
+(`--frozen-lockfile`, no peer warnings), typecheck, lint (0 errors, 0 warnings),
+format check, 153 unit tests, and build all green in CI on Node 22. Playwright
+E2E is not wired into CI yet.
 
 ## Phase 1 — Foundation
 
