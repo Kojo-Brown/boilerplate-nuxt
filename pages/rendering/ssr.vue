@@ -55,9 +55,7 @@ async function handleRefresh() {
       <div
         class="rounded-xl border border-blue-200 bg-blue-50 p-6 dark:border-blue-800 dark:bg-blue-950/30"
       >
-        <h2 class="mb-4 text-lg font-semibold text-[var(--color-foreground)]">
-          Server Response
-        </h2>
+        <h2 class="mb-4 text-lg font-semibold text-[var(--color-foreground)]">Server Response</h2>
 
         <dl class="space-y-3 text-sm">
           <div class="flex justify-between gap-4">

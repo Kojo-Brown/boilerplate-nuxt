@@ -26,7 +26,7 @@ const { isDark, preference: colorPreference } = useAppColorMode()
             {{ t('dashboard.title') }}
           </h1>
           <button
-            class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
             @click="handleLogout"
           >
             {{ t('common.signOut') }}
@@ -73,7 +73,7 @@ const { isDark, preference: colorPreference } = useAppColorMode()
 
       <!-- Counter store demo -->
       <div
-        class="rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6 space-y-4"
+        class="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6"
       >
         <h2 class="text-lg font-semibold text-[var(--color-foreground)]">
           {{ t('counter.title') }}
@@ -118,7 +118,7 @@ const { isDark, preference: colorPreference } = useAppColorMode()
 
       <!-- Preferences store demo -->
       <div
-        class="rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6 space-y-4"
+        class="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)] p-6"
       >
         <h2 class="text-lg font-semibold text-[var(--color-foreground)]">
           {{ t('preferences.title') }}
@@ -129,7 +129,7 @@ const { isDark, preference: colorPreference } = useAppColorMode()
 
         <div class="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <label class="block font-medium text-[var(--color-foreground)] mb-1">
+            <label class="mb-1 block font-medium text-[var(--color-foreground)]">
               {{ t('preferences.colorMode') }}
             </label>
             <div class="space-y-2">
@@ -142,26 +142,30 @@ const { isDark, preference: colorPreference } = useAppColorMode()
           </div>
 
           <div>
-            <label class="block font-medium text-[var(--color-foreground)] mb-1">
+            <label class="mb-1 block font-medium text-[var(--color-foreground)]">
               {{ t('preferences.sidebar') }}
             </label>
             <button
-              class="rounded px-3 py-1 text-xs font-medium border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)]"
+              class="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-1 text-xs font-medium text-[var(--color-foreground)]"
               @click="preferences.toggleSidebar()"
             >
-              {{ preferences.isSidebarOpen ? t('preferences.closeSidebar') : t('preferences.openSidebar') }}
+              {{
+                preferences.isSidebarOpen
+                  ? t('preferences.closeSidebar')
+                  : t('preferences.openSidebar')
+              }}
             </button>
           </div>
 
           <div>
-            <label class="block font-medium text-[var(--color-foreground)] mb-1">
+            <label class="mb-1 block font-medium text-[var(--color-foreground)]">
               {{ t('preferences.language') }}
             </label>
             <LanguageSwitcher />
           </div>
 
           <div>
-            <label class="block font-medium text-[var(--color-foreground)] mb-1">
+            <label class="mb-1 block font-medium text-[var(--color-foreground)]">
               {{ t('preferences.pageSize') }}
             </label>
             <select

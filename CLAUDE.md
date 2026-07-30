@@ -1,9 +1,11 @@
 # boilerplate-nuxt — Agent Instructions
 
 ## What this repo is
+
 Production-grade Nuxt 4 full-stack boilerplate. Spec-driven and PR-driven: one `SPEC.md` item per run.
 
 ## Your job (scheduled agent, every 4h)
+
 1. `git checkout main && git pull --ff-only origin main`
 2. Read `SPEC.md`, take the **first** `- [ ]` item. Phase 0 items always win.
 3. `git checkout -b <type>/<kebab-slug>` (`feat`/`fix`/`chore`/`ci`/`docs`)
@@ -27,11 +29,13 @@ weaken a test or lower a threshold to force green — if a gate is genuinely
 wrong, change it deliberately and say why in the PR.
 
 ## Secrets
+
 Never commit real credentials, tokens, keys, or `.env` files. Placeholders in
 `.env.example` only; CI reads from the GitHub secret store. Test fixtures must
 look obviously fake. Scan `git diff --cached` before every push.
 
 ## Conventions
+
 - Server routes in `server/api/`, typed via `H3Event`
 - Drizzle for all DB access; no raw SQL in route handlers
 - Composables are SSR-safe: no module-scope mutable state

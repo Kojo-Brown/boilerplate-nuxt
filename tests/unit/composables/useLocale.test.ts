@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref, computed } from 'vue'
 
+import { useLocale } from '../../../composables/useLocale'
+
 // Nuxt auto-imports + @nuxtjs/i18n composables are unavailable in the node test environment.
-// Stub them globally before importing the composable.
+// Stubbed on globalThis; the composable resolves them when it is called.
 
 const mockLocale = ref('en')
 const mockSetLocale = vi.fn(async (code: string) => {
@@ -27,8 +29,6 @@ vi.stubGlobal('useI18n', () => ({
 }))
 
 vi.stubGlobal('computed', computed)
-
-import { useLocale } from '../../../composables/useLocale'
 
 describe('useLocale', () => {
   beforeEach(() => {

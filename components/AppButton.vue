@@ -8,7 +8,8 @@ interface Props {
   fullWidth?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+// No binding needed: the template references the props by name directly.
+withDefaults(defineProps<Props>(), {
   variant: 'primary',
   size: 'md',
   type: 'button',
@@ -42,7 +43,7 @@ const sizeClasses: Record<NonNullable<Props['size']>, string> = {
     :disabled="disabled || loading"
     :class="[
       'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md font-medium transition-all',
-      'focus:outline-none focus:ring-2 focus:ring-offset-2',
+      'focus:ring-2 focus:ring-offset-2 focus:outline-none',
       'disabled:cursor-not-allowed disabled:opacity-50',
       variantClasses[variant],
       sizeClasses[size],

@@ -21,11 +21,14 @@ definePageMeta({
 
 const mounted = ref(false)
 const clientTime = ref('')
+const userAgent = ref('')
 const randomValues = ref<number[]>([])
 
 onMounted(() => {
   mounted.value = true
   clientTime.value = new Date().toISOString()
+  // Browser globals aren't in the template's render scope — read it here.
+  userAgent.value = navigator.userAgent
   randomValues.value = Array.from({ length: 5 }, () => Math.random())
 })
 </script>
@@ -62,9 +65,7 @@ onMounted(() => {
 
         <ClientOnly>
           <template #fallback>
-            <p class="text-sm text-[var(--color-muted-foreground)] italic">
-              Loading in browser…
-            </p>
+            <p class="text-sm text-[var(--color-muted-foreground)] italic">Loading in browser…</p>
           </template>
 
           <dl class="space-y-3 text-sm">
@@ -74,8 +75,8 @@ onMounted(() => {
             </div>
             <div class="flex justify-between gap-4">
               <dt class="font-medium text-[var(--color-muted-foreground)]">User agent</dt>
-              <dd class="max-w-xs truncate font-mono text-[var(--color-foreground)] text-xs">
-                {{ navigator.userAgent }}
+              <dd class="max-w-xs truncate font-mono text-xs text-[var(--color-foreground)]">
+                {{ userAgent }}
               </dd>
             </div>
             <div class="flex justify-between gap-4">

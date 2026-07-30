@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import en from '../../locales/en.json'
-import fr from '../../locales/fr.json'
+import en from '../../i18n/locales/en.json'
+import fr from '../../i18n/locales/fr.json'
 
 type NestedRecord = { [key: string]: string | NestedRecord }
 

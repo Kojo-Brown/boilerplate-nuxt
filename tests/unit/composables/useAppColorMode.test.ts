@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref, computed } from 'vue'
 
+import { useAppColorMode } from '../../../composables/useAppColorMode'
+
 // Nuxt auto-imports are unavailable in the node test environment.
 // Use reactive refs so computed properties inside the composable actually track changes.
 
@@ -28,8 +30,6 @@ vi.stubGlobal('usePreferencesStore', () => ({
 }))
 
 vi.stubGlobal('computed', computed)
-
-import { useAppColorMode } from '../../../composables/useAppColorMode'
 
 describe('useAppColorMode', () => {
   beforeEach(() => {

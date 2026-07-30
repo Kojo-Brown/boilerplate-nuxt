@@ -80,11 +80,17 @@ const modes = [
         <h1 class="text-3xl font-bold text-[var(--color-foreground)]">Rendering Modes</h1>
         <p class="mt-2 text-[var(--color-muted-foreground)]">
           Nuxt 4 supports per-page rendering strategies via
-          <code class="rounded bg-[var(--color-muted)] px-1 py-0.5 text-xs font-mono">definePageMeta</code>
+          <code class="rounded bg-[var(--color-muted)] px-1 py-0.5 font-mono text-xs"
+            >definePageMeta</code
+          >
           and
-          <code class="rounded bg-[var(--color-muted)] px-1 py-0.5 text-xs font-mono">routeRules</code>
+          <code class="rounded bg-[var(--color-muted)] px-1 py-0.5 font-mono text-xs"
+            >routeRules</code
+          >
           in
-          <code class="rounded bg-[var(--color-muted)] px-1 py-0.5 text-xs font-mono">nuxt.config.ts</code>.
+          <code class="rounded bg-[var(--color-muted)] px-1 py-0.5 font-mono text-xs"
+            >nuxt.config.ts</code
+          >.
         </p>
       </div>
 
@@ -102,10 +108,7 @@ const modes = [
           <div class="flex items-start justify-between gap-3">
             <span :class="['text-2xl font-bold', mode.color]">{{ mode.label }}</span>
             <span
-              :class="[
-                'shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                mode.badgeBg,
-              ]"
+              :class="['shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold', mode.badgeBg]"
             >
               {{ mode.badge }}
             </span>
@@ -136,8 +139,7 @@ const modes = [
           Both configure the same rendering behaviour.
           <strong class="text-[var(--color-foreground)]">routeRules</strong> (in
           <code class="font-mono text-xs">nuxt.config.ts</code>) applies globally and supports
-          server-side cache policies like
-          <code class="font-mono text-xs">swr</code>.
+          server-side cache policies like <code class="font-mono text-xs">swr</code>.
           <strong class="text-[var(--color-foreground)]">definePageMeta</strong> keeps the config
           co-located with the page component and is the preferred choice for
           <code class="font-mono text-xs">prerender</code> and

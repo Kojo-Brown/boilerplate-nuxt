@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Stub Nuxt auto-imports before the module under test is imported
+import { createApiClient } from '../../../utils/api'
+
+// Nuxt auto-import stubs. These are read when the interceptors run, not when the
+// module is evaluated, so setting them here is soon enough.
 const mockNavigateTo = vi.fn()
 const mockFetchCreate = vi.fn()
 
@@ -14,13 +17,15 @@ if (typeof globalThis.crypto === 'undefined') {
   })
 }
 
-import { createApiClient } from '../../../utils/api'
-
 describe('createApiClient', () => {
   type CapturedOptions = {
     baseURL?: string
     onRequest?: (ctx: { options: Record<string, unknown> }) => void
-    onResponse?: (ctx: { request: unknown; response: { status: number }; options: Record<string, unknown> }) => void
+    onResponse?: (ctx: {
+      request: unknown
+      response: { status: number }
+      options: Record<string, unknown>
+    }) => void
     onResponseError?: (ctx: { response: { status: number } }) => Promise<void>
     onRequestError?: (ctx: { request: unknown; error: unknown }) => void
     [key: string]: unknown
@@ -105,7 +110,6 @@ describe('createApiClient', () => {
       await capturedOptions.onResponseError?.({ response: { status: 401 } })
       expect(mockNavigateTo).toHaveBeenCalledWith('/login')
 
-      // @ts-expect-error restore
       globalThis.window = originalWindow
     })
 

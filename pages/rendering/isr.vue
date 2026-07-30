@@ -58,9 +58,7 @@ const { data: serverInfo } = await useAsyncData('isr-demo', () =>
 
         <dl class="space-y-3 text-sm">
           <div class="flex justify-between gap-4">
-            <dt class="font-medium text-[var(--color-muted-foreground)]">
-              Rendered / cached at
-            </dt>
+            <dt class="font-medium text-[var(--color-muted-foreground)]">Rendered / cached at</dt>
             <dd class="font-mono text-[var(--color-foreground)]">
               {{ serverInfo?.timestamp ?? '—' }}
             </dd>
@@ -84,8 +82,8 @@ const { data: serverInfo } = await useAsyncData('isr-demo', () =>
         </dl>
 
         <p class="mt-4 text-xs text-[var(--color-muted-foreground)]">
-          The timestamp and random value stay frozen for 60 seconds. After the TTL the next
-          visitor triggers a background re-render while still receiving the stale cache.
+          The timestamp and random value stay frozen for 60 seconds. After the TTL the next visitor
+          triggers a background re-render while still receiving the stale cache.
         </p>
       </div>
 
@@ -96,19 +94,40 @@ const { data: serverInfo } = await useAsyncData('isr-demo', () =>
         </h2>
         <ol class="space-y-2 text-sm text-[var(--color-muted-foreground)]">
           <li class="flex gap-3">
-            <span class="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-amber-100 text-center text-xs font-bold text-amber-700 dark:bg-amber-900 dark:text-amber-300 leading-5">1</span>
-            <span>First request: Nuxt renders the page on the server and stores the HTML in the cache.</span>
+            <span
+              class="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-amber-100 text-center text-xs leading-5 font-bold text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+              >1</span
+            >
+            <span
+              >First request: Nuxt renders the page on the server and stores the HTML in the
+              cache.</span
+            >
           </li>
           <li class="flex gap-3">
-            <span class="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-amber-100 text-center text-xs font-bold text-amber-700 dark:bg-amber-900 dark:text-amber-300 leading-5">2</span>
-            <span>Requests within the TTL (60 s): Nuxt returns the cached HTML immediately — zero server cost.</span>
+            <span
+              class="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-amber-100 text-center text-xs leading-5 font-bold text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+              >2</span
+            >
+            <span
+              >Requests within the TTL (60 s): Nuxt returns the cached HTML immediately — zero
+              server cost.</span
+            >
           </li>
           <li class="flex gap-3">
-            <span class="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-amber-100 text-center text-xs font-bold text-amber-700 dark:bg-amber-900 dark:text-amber-300 leading-5">3</span>
-            <span>After TTL: the next request gets the stale cache; Nuxt re-renders in the background and updates the cache.</span>
+            <span
+              class="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-amber-100 text-center text-xs leading-5 font-bold text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+              >3</span
+            >
+            <span
+              >After TTL: the next request gets the stale cache; Nuxt re-renders in the background
+              and updates the cache.</span
+            >
           </li>
           <li class="flex gap-3">
-            <span class="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-amber-100 text-center text-xs font-bold text-amber-700 dark:bg-amber-900 dark:text-amber-300 leading-5">4</span>
+            <span
+              class="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-amber-100 text-center text-xs leading-5 font-bold text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+              >4</span
+            >
             <span>Subsequent requests: receive the freshly regenerated HTML.</span>
           </li>
         </ol>

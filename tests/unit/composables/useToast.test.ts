@@ -1,17 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ref, readonly } from 'vue'
 
+import { useToast } from '../../../composables/useToast'
+
 // useToast uses module-level Vue refs — stub ref and readonly so the shared
 // singleton works correctly in the node test environment.
 vi.stubGlobal('ref', ref)
 vi.stubGlobal('readonly', readonly)
 
-import { useToast } from '../../../composables/useToast'
-
 // Helper to drain all pending toasts between tests.
 function clearAllToasts() {
   const { toasts, removeToast } = useToast()
-  const ids = (toasts.value as { id: string }[]).map((t) => t.id)
+  const ids = toasts.value.map((t) => t.id)
   ids.forEach((id) => removeToast(id))
 }
 
@@ -85,7 +85,7 @@ describe('useToast', () => {
       const { addToast, toasts } = useToast()
       addToast({ message: 'first' })
       addToast({ message: 'second' })
-      const ids = (toasts.value as { id: string }[]).map((t) => t.id)
+      const ids = toasts.value.map((t) => t.id)
       expect(new Set(ids).size).toBe(2)
     })
 
@@ -136,7 +136,7 @@ describe('useToast', () => {
       addToast({ message: 'third' })
       removeToast(idToRemove)
       expect(toasts.value).toHaveLength(2)
-      const messages = (toasts.value as { message: string }[]).map((t) => t.message)
+      const messages = toasts.value.map((t) => t.message)
       expect(messages).toEqual(['first', 'third'])
     })
   })

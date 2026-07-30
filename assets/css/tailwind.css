@@ -1,0 +1,37 @@
+@import 'tailwindcss';
+
+/*
+ * @nuxtjs/color-mode is configured with `classSuffix: ''`, so it toggles a bare
+ * `.dark` class on <html>. Tailwind 4 defaults `dark:` to the `prefers-color-scheme`
+ * media query, so the class strategy has to be declared explicitly.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens. Registering them under @theme makes them available both as
+ * `var(--color-*)` and as Tailwind utilities (`bg-background`, `text-muted-foreground`, …).
+ */
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #0a0a0a;
+  --color-primary: #4f46e5;
+  --color-primary-foreground: #ffffff;
+  --color-muted: #f4f4f5;
+  --color-muted-foreground: #71717a;
+  --color-border: #e4e4e7;
+}
+
+.dark {
+  --color-background: #09090b;
+  --color-foreground: #fafafa;
+  --color-primary: #6366f1;
+  --color-primary-foreground: #ffffff;
+  --color-muted: #27272a;
+  --color-muted-foreground: #a1a1aa;
+  --color-border: #27272a;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}

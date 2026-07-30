@@ -18,8 +18,7 @@ const iconPaths: Record<Toast['type'], string> = {
 const wrapperClasses: Record<Toast['type'], string> = {
   success: 'border-green-500 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-200',
   error: 'border-red-500 bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200',
-  warning:
-    'border-yellow-500 bg-yellow-50 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200',
+  warning: 'border-yellow-500 bg-yellow-50 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200',
   info: 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200',
 }
 
@@ -61,13 +60,7 @@ const iconClasses: Record<Toast['type'], string> = {
       :aria-label="`Dismiss ${toast.type} notification`"
       @click="emit('dismiss', toast.id)"
     >
-      <svg
-        class="h-4 w-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        aria-hidden="true"
-      >
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
         <path
           stroke-linecap="round"
           stroke-linejoin="round"

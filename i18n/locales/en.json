@@ -18,7 +18,7 @@
   "auth": {
     "loginTitle": "Sign in to your account",
     "emailLabel": "Email address",
-    "emailPlaceholder": "you@example.com",
+    "emailPlaceholder": "you{'@'}example.com",
     "passwordLabel": "Password",
     "passwordPlaceholder": "••••••••",
     "signInButton": "Sign in",
