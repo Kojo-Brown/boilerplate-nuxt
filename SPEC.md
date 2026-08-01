@@ -7,12 +7,30 @@
 - [x] Verify every dependency version actually exists on the registry and fix the ones that do not, then commit a lockfile
 - [x] Get `install`, `typecheck`, `lint`, `test`, and `build` all passing locally from a clean clone
 - [x] Promote `workflow-templates/ci.yml` to `.github/workflows/ci.yml` and confirm it runs green on a PR
-- [ ] Add a CI job matrix covering the supported Node version and fail the build on any warning
+- [x] Add a CI job matrix covering the supported Node version and fail the build on any warning — `engines.node` declared as `^22.19.0 || ^24.11.0`; every gate runs on both majors with `fail-fast: false` (PR #20)
 
 Phase 0 items 1-3 complete as of PR #19 (2026-07-30): install
 (`--frozen-lockfile`, no peer warnings), typecheck, lint (0 errors, 0 warnings),
 format check, 153 unit tests, and build all green in CI on Node 22. Playwright
 E2E is not wired into CI yet.
+
+**Phase 0 complete as of PR #20 (2026-08-01).** All eight jobs — lint,
+typecheck, unit tests, and build on Node 22 and Node 24 — green, with 153
+tests per leg. Warnings are failures on four fronts: `--strict-peer-dependencies`,
+`engine-strict=true` in `.npmrc`, `eslint --max-warnings=0`, and per-step
+`NODE_OPTIONS=--throw-deprecation`. The three warnings CI was actually
+emitting were fixed at the source, not muted: `pnpm.onlyBuiltDependencies`
+approves esbuild/unrs-resolver, `if-no-files-found: ignore` covers the empty
+coverage upload, and every action moved to a `using: node24` major
+(checkout v7, setup-node v6, upload-artifact v6, pnpm/action-setup v6) to
+clear the Node-20 deprecation annotation. Both legs were also run locally
+against real Node 22.22.2 and 24.18.1 binaries before pushing.
+
+Known gaps carried into Phase 6: Playwright E2E is still not wired into CI —
+it needs a running app and a browser-caching decision across the matrix.
+`@types/node` remains at `^22` (typechecks cleanly under the Node 24 leg).
+The matrix covers Node majors only, on a single `ubuntu-latest` runner, and
+actions are pinned by major tag rather than commit digest.
 
 ## Phase 1 — Foundation
 
