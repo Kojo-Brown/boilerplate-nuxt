@@ -24,6 +24,16 @@ concurrency:
 #     point where that API is finally removed.
 # `--pending-deprecation` is deliberately not set: it flags APIs that are not
 # deprecated yet, which would fail the build on advisory notices.
+#
+# `NODE_OPTIONS` is scoped to individual `run` steps rather than set on the
+# workflow, because the marketplace actions below emit their own deprecation
+# warnings (upload-artifact still pulls in `punycode`) and failing on those
+# would report a runner problem as a repo problem.
+#
+# Every action is pinned to a major whose `action.yml` declares `using: node24`.
+# The older `@v4` line targets node20, which the runner force-upgrades while
+# emitting a deprecation warning on every job — a standing warning that this
+# workflow is supposed to be free of.
 
 jobs:
   lint:
@@ -34,11 +44,11 @@ jobs:
       matrix:
         node-version: [22, 24]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
@@ -66,11 +76,11 @@ jobs:
       matrix:
         node-version: [22, 24]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
@@ -93,11 +103,11 @@ jobs:
       matrix:
         node-version: [22, 24]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
@@ -114,7 +124,7 @@ jobs:
 
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-node-${{ matrix.node-version }}
           path: coverage/
@@ -133,11 +143,11 @@ jobs:
       NUXT_SESSION_PASSWORD: ${{ secrets.NUXT_SESSION_PASSWORD }}
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nuxt_ci
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
@@ -153,7 +163,7 @@ jobs:
           NODE_OPTIONS: --throw-deprecation
 
       - name: Upload build output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: build-output-node-${{ matrix.node-version }}
           path: .output/
