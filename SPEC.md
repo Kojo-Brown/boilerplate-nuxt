@@ -70,13 +70,28 @@ actions are pinned by major tag rather than commit digest.
 
 ## Phase 6 — Vue 3 Advanced Reactivity
 
-- [ ] `shallowRef`, `triggerRef`, and `markRaw` for large-payload performance
+- [x] `shallowRef`, `triggerRef`, and `markRaw` for large-payload performance — `useLargeCollection` holds rows in a `shallowRef`, publishes in-place edits with one `triggerRef` per batch, and keeps its lookup index out of the reactivity system with `markRaw`; `pages/reactivity-performance.vue` measures the claims in-browser rather than asserting them (PR #21)
 - [ ] `effectScope` for grouped teardown in composables
 - [ ] Custom `ref()` with debounce/throttle via `customRef`
 - [ ] Reactivity pitfalls guide: destructuring loss, `toRefs`, and deep-vs-shallow tradeoffs
 - [ ] Composable design rules: no side effects on import, injectable deps, SSR-safe state
 - [ ] `provide`/`inject` with typed `InjectionKey` and a dependency-inversion demo
 - [ ] Render functions + JSX for a dynamic table with slot forwarding
+
+Item 1 complete as of PR #21 (2026-08-10). All five gates green locally and in
+CI on Node 22 and 24; 187 unit tests, 34 of them new. The benchmark behind the
+demo page was run standalone before it was trusted: at 20k rows, deep `ref`
+17.0 ms vs `shallowRef` 1.6 ms, and a `Map` inside `reactive()` 27.7 ms vs the
+same `Map` under `markRaw` 9.2 ms, all four legs returning an identical
+checksum. Both legs read a property off every row deliberately — `ref()`
+converts lazily, so a benchmark that assigns and never reads measures nothing.
+
+Known gaps carried into item 2: `useLargeCollection` is not virtualised, so it
+makes _holding_ a large payload cheap while rendering one stays the caller's
+problem (the demo page paints a fixed window of 6 rows). The new page has no
+Playwright spec — E2E is still unwired from CI, so one would add an unrun test
+rather than a gate — and, like every other demo page here, it sits behind the
+global auth middleware and is unlinked from `pages/index.vue`.
 
 ## Phase 7 — Nitro & Server Engine
 
