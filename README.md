@@ -50,6 +50,53 @@ Approved build scripts are listed in `pnpm.onlyBuiltDependencies`; anything not
 listed makes `pnpm install` print an "ignored build scripts" warning, which is
 why that list exists rather than being left to the default.
 
+## Composable Lifetimes
+
+Effects — `watch`, `watchEffect`, `computed` — belong to whatever scope is
+active when they are created, and a component's scope is disposed on unmount.
+That default is wrong at both ends, and `effectScope` fixes both. Live demo:
+`/effect-scope`.
+
+**State that must outlive the component that asked for it first.** A shared
+composable written as a module-level `ref` plus a `watch` created on first use
+gives the watcher to whichever component mounted first — it dies when _that_
+one unmounts, while others are still reading — and nothing releases it when
+they all leave. `createSharedComposable` (`utils/sharedComposable.ts`) runs the
+factory inside a detached scope and reference-counts consumers, so the group is
+built on the first subscribe and stopped on the last release:
+
+```ts
+export const useSessionClock = createSharedComposable(() => {
+  const now = ref(Date.now())
+  const id = setInterval(() => (now.value = Date.now()), 1_000)
+  onScopeDispose(() => clearInterval(id)) // last consumer out, not the first
+  return { now: readonly(now) }
+})
+```
+
+**Effects that must not outlive the selection that created them.** Watching a
+selected document or subscribing to a room means tearing effects down several
+times while one component stays mounted; the component scope will not do that
+for you, and keeping every `stop()` handle by hand rots the moment someone adds
+an effect. `useScopedEffects()` (`composables/useScopedEffects.ts`) gives the
+group one handle:
+
+```ts
+const selection = useScopedEffects()
+
+watch(documentId, (id) => {
+  selection.run(() => {
+    watch(draft, save) // stopped by the next run()
+    const socket = subscribe(id)
+    onScopeDispose(() => socket.close()) // and so is the socket
+  })
+})
+```
+
+Both bind teardown explicitly rather than relying on ambient ownership, because
+`run()` is typically called from an event handler or a watcher callback, where
+the active scope is either nothing or the wrong one.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).
