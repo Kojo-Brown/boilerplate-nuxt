@@ -71,27 +71,36 @@ actions are pinned by major tag rather than commit digest.
 ## Phase 6 — Vue 3 Advanced Reactivity
 
 - [x] `shallowRef`, `triggerRef`, and `markRaw` for large-payload performance — `useLargeCollection` holds rows in a `shallowRef`, publishes in-place edits with one `triggerRef` per batch, and keeps its lookup index out of the reactivity system with `markRaw`; `pages/reactivity-performance.vue` measures the claims in-browser rather than asserting them (PR #21)
-- [ ] `effectScope` for grouped teardown in composables
+- [x] `effectScope` for grouped teardown in composables — `createSharedComposable` runs a factory in a detached scope and refcounts consumers, so shared state is built on the first subscribe and stopped on the last release rather than dying with whichever component mounted first; `useScopedEffects` covers the opposite lifetime, disposing the previous group on every `run()` so effects tied to a selection do not survive it; `pages/effect-scope.vue` drives both against real scopes (PR #22)
 - [ ] Custom `ref()` with debounce/throttle via `customRef`
 - [ ] Reactivity pitfalls guide: destructuring loss, `toRefs`, and deep-vs-shallow tradeoffs
 - [ ] Composable design rules: no side effects on import, injectable deps, SSR-safe state
 - [ ] `provide`/`inject` with typed `InjectionKey` and a dependency-inversion demo
 - [ ] Render functions + JSX for a dynamic table with slot forwarding
 
-Item 1 complete as of PR #21 (2026-08-10). All five gates green locally and in
-CI on Node 22 and 24; 187 unit tests, 34 of them new. The benchmark behind the
-demo page was run standalone before it was trusted: at 20k rows, deep `ref`
-17.0 ms vs `shallowRef` 1.6 ms, and a `Map` inside `reactive()` 27.7 ms vs the
-same `Map` under `markRaw` 9.2 ms, all four legs returning an identical
-checksum. Both legs read a property off every row deliberately — `ref()`
-converts lazily, so a benchmark that assigns and never reads measures nothing.
+Item 2 complete as of PR #22 (2026-08-13). All gates green locally and in CI on
+Node 22 and 24; 212 unit tests, 25 of them new; coverage 84.4% statements /
+93.9% branches, unchanged thresholds.
 
-Known gaps carried into item 2: `useLargeCollection` is not virtualised, so it
-makes _holding_ a large payload cheap while rendering one stays the caller's
-problem (the demo page paints a fixed window of 6 rows). The new page has no
-Playwright spec — E2E is still unwired from CI, so one would add an unrun test
-rather than a gate — and, like every other demo page here, it sits behind the
-global auth middleware and is unlinked from `pages/index.vue`.
+Two decisions worth keeping. Both primitives create their inner scopes
+_detached_ and bind teardown explicitly, because `run()` is normally called
+from an event handler or a watcher callback where the ambient scope is either
+absent or the wrong owner — adopting it is the bug the primitives exist to
+prevent. And `createSharedComposable` checks instance identity before stopping:
+a consumer that outlives an explicit `dispose()` still fires its release
+callback, and without the guard it would tear down the instance that had
+replaced it. There is a test for that race specifically.
+
+Known gaps carried into item 3: `createSharedComposable` is per-process, not
+per-request, so subscribing during SSR would share state across requests —
+documented in its docblock, with `useState` named as the tool for per-request
+state, but not enforced by anything. The demo page uses stand-in `effectScope`s
+rather than real child components, which makes the refcount visible but leaves
+the mount/unmount path covered only by unit tests. It has no Playwright spec —
+E2E is still unwired from CI, so one would add an unrun test rather than a gate
+— and, like every other demo page here, it sits behind the global auth
+middleware and is unlinked from `pages/index.vue`. `useLargeCollection` from
+item 1 is still not virtualised.
 
 ## Phase 7 — Nitro & Server Engine
 
