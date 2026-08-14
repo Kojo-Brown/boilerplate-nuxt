@@ -97,6 +97,52 @@ Both bind teardown explicitly rather than relying on ambient ownership, because
 `run()` is typically called from an event handler or a watcher callback, where
 the active scope is either nothing or the wrong one.
 
+## Deferred Refs
+
+`customRef` hands you `track` and `trigger`, which lets a ref separate _when a
+value is written_ from _when its readers are told_. Putting the delay in the
+value rather than in the handler means every consumer inherits it — including
+consumers written later that know nothing about it — and the ref stays a plain
+`Ref<T>`, so `v-model`, `watch`, and `computed` are unchanged. Live demo:
+`/custom-ref`.
+
+**Debounce — publish once the writes stop.** `useDebouncedRef()`
+(`composables/useDebouncedRef.ts`) for search boxes, filter panels, autosave:
+anything where only the settled value is worth acting on.
+
+```ts
+const query = useDebouncedRef('', 300, { maxWait: 2_000 })
+const { pending, flush } = query
+
+// Fires once per pause in typing, not once per keystroke.
+watch(query, (q) => search(q))
+```
+
+`maxWait` is not optional in spirit: without it, someone typing steadily faster
+than `delay` never triggers a search at all.
+
+**Throttle — publish at a bounded rate.** `useThrottledRef()`
+(`composables/useThrottledRef.ts`) for scroll offsets, drag positions, live
+cursors: anything where the values in the middle of a burst are the point.
+Debouncing those shows nothing until the user stops moving.
+
+```ts
+const scrollY = useThrottledRef(0, 100) // ~10 commits/s, not ~60
+```
+
+Both return a `DeferredRef<T>` — a ref with `draft` (the latest write, whether
+or not it has landed), `pending`, `flush()`, and `cancel()`. Those are
+properties _on_ the ref, so in a template, where a top-level ref is
+auto-unwrapped, destructure first:
+
+```ts
+const { pending, flush } = query // `query.pending` in a template is undefined
+```
+
+Both write through instead of deferring during SSR. A render pass resolves
+before any `setTimeout` fires, so a deferred write on the server is not delayed,
+it is lost — and the markup would then disagree with the client after hydration.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).
