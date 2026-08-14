@@ -72,35 +72,47 @@ actions are pinned by major tag rather than commit digest.
 
 - [x] `shallowRef`, `triggerRef`, and `markRaw` for large-payload performance — `useLargeCollection` holds rows in a `shallowRef`, publishes in-place edits with one `triggerRef` per batch, and keeps its lookup index out of the reactivity system with `markRaw`; `pages/reactivity-performance.vue` measures the claims in-browser rather than asserting them (PR #21)
 - [x] `effectScope` for grouped teardown in composables — `createSharedComposable` runs a factory in a detached scope and refcounts consumers, so shared state is built on the first subscribe and stopped on the last release rather than dying with whichever component mounted first; `useScopedEffects` covers the opposite lifetime, disposing the previous group on every `run()` so effects tied to a selection do not survive it; `pages/effect-scope.vue` drives both against real scopes (PR #22)
-- [ ] Custom `ref()` with debounce/throttle via `customRef`
+- [x] Custom `ref()` with debounce/throttle via `customRef` — `deferredRef` is the shared `customRef` shell (track/trigger, a `draft` of the uncommitted write, `pending` derived from the gap between draft and committed, `flush`/`cancel`, scope-bound teardown) and debounce and throttle differ only in a `CommitPlanner` deciding when a write reaches `commit`; `useDebouncedRef` publishes once the writes stop, `useThrottledRef` at most once per interval, and `pages/custom-ref.vue` counts keystrokes against searches and pointer events against publishes (PR #23)
 - [ ] Reactivity pitfalls guide: destructuring loss, `toRefs`, and deep-vs-shallow tradeoffs
 - [ ] Composable design rules: no side effects on import, injectable deps, SSR-safe state
 - [ ] `provide`/`inject` with typed `InjectionKey` and a dependency-inversion demo
 - [ ] Render functions + JSX for a dynamic table with slot forwarding
 
-Item 2 complete as of PR #22 (2026-08-13). All gates green locally and in CI on
-Node 22 and 24; 212 unit tests, 25 of them new; coverage 84.4% statements /
-93.9% branches, unchanged thresholds.
+Item 3 complete as of PR #23 (2026-08-14). All gates green locally and in CI on
+Node 22 and 24 — install, typecheck, lint, format check, test, build; 255 unit
+tests, 43 of them new; coverage 88.21% statements / 95.62% branches, up from
+84.4% / 93.9%, with `utils/deferredRef.ts` at 100% on every metric and
+thresholds unchanged. No dependencies added.
 
-Two decisions worth keeping. Both primitives create their inner scopes
-_detached_ and bind teardown explicitly, because `run()` is normally called
-from an event handler or a watcher callback where the ambient scope is either
-absent or the wrong owner — adopting it is the bug the primitives exist to
-prevent. And `createSharedComposable` checks instance identity before stopping:
-a consumer that outlives an explicit `dispose()` still fires its release
-callback, and without the guard it would tear down the instance that had
-replaced it. There is a test for that race specifically.
+Three decisions worth keeping. Teardown _cancels_ rather than flushes: a
+component that has gone away is not waiting for the value, and committing
+during disposal would notify watchers that are themselves being torn down. Both
+composables write through instead of deferring on the server (`defer:
+!import.meta.server`), because a render pass resolves before any `setTimeout`
+fires — a deferred write there is not delayed, it is dropped, and the markup
+would then disagree with the client after hydration. And `debouncePlan` takes
+`maxWait`, with the docs pushing callers toward it, because a pure trailing
+debounce never commits at all for someone writing steadily faster than the
+delay. `throttlePlan` throws on `{ leading: false, trailing: false }` rather
+than silently never committing.
 
-Known gaps carried into item 3: `createSharedComposable` is per-process, not
-per-request, so subscribing during SSR would share state across requests —
-documented in its docblock, with `useState` named as the tool for per-request
-state, but not enforced by anything. The demo page uses stand-in `effectScope`s
-rather than real child components, which makes the refcount visible but leaves
-the mount/unmount path covered only by unit tests. It has no Playwright spec —
-E2E is still unwired from CI, so one would add an unrun test rather than a gate
-— and, like every other demo page here, it sits behind the global auth
-middleware and is unlinked from `pages/index.vue`. `useLargeCollection` from
-item 1 is still not virtualised.
+`draft` is readonly at the type level only. Wrapping it in `readonly()` would
+reintroduce the deep proxy the `shallowRef` exists to avoid, so an object
+written to the ref would come back out of `draft` as a different object than
+the ref itself reports.
+
+Known gaps carried into item 4: the extra members are properties _on_ the ref,
+which is the price of it staying a real `Ref<T>` — a top-level ref is
+auto-unwrapped in templates, so `query.pending` there reads a property of the
+unwrapped value. That is documented on the type, in the README, and worked
+around in the demo page by destructuring, but nothing enforces it. There is no
+Playwright spec: E2E is still unwired from CI, so one would add an unrun test
+rather than a gate, and browser-level assertions about typing and pointer
+timing are exactly the flake this repo does not need — the timing behaviour is
+covered deterministically with fake timers instead. Like every other demo page
+here, `/custom-ref` sits behind the global auth middleware and is unlinked from
+`pages/index.vue`. The item-2 gap is unchanged: `createSharedComposable` is
+per-process, not per-request.
 
 ## Phase 7 — Nitro & Server Engine
 
