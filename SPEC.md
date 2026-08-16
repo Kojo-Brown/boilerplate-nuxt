@@ -73,44 +73,50 @@ actions are pinned by major tag rather than commit digest.
 - [x] `shallowRef`, `triggerRef`, and `markRaw` for large-payload performance — `useLargeCollection` holds rows in a `shallowRef`, publishes in-place edits with one `triggerRef` per batch, and keeps its lookup index out of the reactivity system with `markRaw`; `pages/reactivity-performance.vue` measures the claims in-browser rather than asserting them (PR #21)
 - [x] `effectScope` for grouped teardown in composables — `createSharedComposable` runs a factory in a detached scope and refcounts consumers, so shared state is built on the first subscribe and stopped on the last release rather than dying with whichever component mounted first; `useScopedEffects` covers the opposite lifetime, disposing the previous group on every `run()` so effects tied to a selection do not survive it; `pages/effect-scope.vue` drives both against real scopes (PR #22)
 - [x] Custom `ref()` with debounce/throttle via `customRef` — `deferredRef` is the shared `customRef` shell (track/trigger, a `draft` of the uncommitted write, `pending` derived from the gap between draft and committed, `flush`/`cancel`, scope-bound teardown) and debounce and throttle differ only in a `CommitPlanner` deciding when a write reaches `commit`; `useDebouncedRef` publishes once the writes stop, `useThrottledRef` at most once per interval, and `pages/custom-ref.vue` counts keystrokes against searches and pointer events against publishes (PR #23)
-- [ ] Reactivity pitfalls guide: destructuring loss, `toRefs`, and deep-vs-shallow tradeoffs
+- [x] Reactivity pitfalls guide: destructuring loss, `toRefs`, and deep-vs-shallow tradeoffs — `docs/reactivity-pitfalls.md` is the guide and `tests/unit/reactivity-pitfalls.test.ts` is its proof, one test per claim, so a Vue upgrade that changes a semantic fails CI on the line that documents it; `utils/reactivityInspect.ts` classifies any value without reading through it, and `pages/reactivity-pitfalls.vue` runs broken and fixed side by side against the same mutation (PR #24)
 - [ ] Composable design rules: no side effects on import, injectable deps, SSR-safe state
 - [ ] `provide`/`inject` with typed `InjectionKey` and a dependency-inversion demo
 - [ ] Render functions + JSX for a dynamic table with slot forwarding
 
-Item 3 complete as of PR #23 (2026-08-14). All gates green locally and in CI on
-Node 22 and 24 — install, typecheck, lint, format check, test, build; 255 unit
-tests, 43 of them new; coverage 88.21% statements / 95.62% branches, up from
-84.4% / 93.9%, with `utils/deferredRef.ts` at 100% on every metric and
+Item 4 complete as of PR #24 (2026-08-16). All gates green locally and in CI on
+Node 22 and 24 — install, lint, format check, typecheck, test, build; 322 unit
+tests, 67 of them new; coverage 88.91% statements / 96.39% branches, up from
+88.21% / 95.62%, with `utils/reactivityInspect.ts` at 100% on every metric and
 thresholds unchanged. No dependencies added.
 
-Three decisions worth keeping. Teardown _cancels_ rather than flushes: a
-component that has gone away is not waiting for the value, and committing
-during disposal would notify watchers that are themselves being torn down. Both
-composables write through instead of deferring on the server (`defer:
-!import.meta.server`), because a render pass resolves before any `setTimeout`
-fires — a deferred write there is not delayed, it is dropped, and the markup
-would then disagree with the client after hydration. And `debouncePlan` takes
-`maxWait`, with the docs pushing callers toward it, because a pure trailing
-debounce never commits at all for someone writing steadily faster than the
-delay. `throttlePlan` throws on `{ leading: false, trailing: false }` rather
-than silently never committing.
+The guide is not prose. Every claim in `docs/reactivity-pitfalls.md` has a test
+next to it, and each was written by probing the runtime and transcribing what it
+actually did rather than from memory. Two came back different from expected and
+are in the guide because of it: `toRef` on a genuinely plain object reads
+through — it is a getter over the same object — so it looks right in a debugger
+and tracks nothing, and refs unwrap as object properties of a `reactive` proxy
+but not inside arrays or Maps, so `state.x` and `list[0].value` are both correct
+in the same file.
 
-`draft` is readonly at the type level only. Wrapping it in `readonly()` would
-reintroduce the deep proxy the `shallowRef` exists to avoid, so an object
-written to the ref would come back out of `draft` as a different object than
-the ref itself reports.
+`describeReactivity` is deliberately coarser than Vue's API in two places. A
+writable `computed` and a `customRef` are reported as `'ref'`, and a read-only
+`computed` and `readonly(ref(x))` both as `'readonlyRef'`, because the public
+predicates cannot separate them — `isProxy` happens to today, but only as a side
+effect of how `ComputedRefImpl` carries its flags. It also never touches `.value`
+and never reads a property, so calling it inside an effect adds no dependency; a
+diagnostic that changed which effects re-run would be worse than none, and two
+tests hold that line.
 
-Known gaps carried into item 4: the extra members are properties _on_ the ref,
-which is the price of it staying a real `Ref<T>` — a top-level ref is
-auto-unwrapped in templates, so `query.pending` there reads a property of the
-unwrapped value. That is documented on the type, in the README, and worked
-around in the demo page by destructuring, but nothing enforces it. There is no
-Playwright spec: E2E is still unwired from CI, so one would add an unrun test
-rather than a gate, and browser-level assertions about typing and pointer
-timing are exactly the flake this repo does not need — the timing behaviour is
-covered deterministically with fake timers instead. Like every other demo page
-here, `/custom-ref` sits behind the global auth middleware and is unlinked from
+The demo page was driven in a real Chromium against the production build: SSR
+returns 200, the counters read correctly through hydration and every button, and
+the console is empty — no hydration mismatch, no Vue warnings. Its notification
+claims are measured with `watchSyncEffect` counters rather than read off the DOM,
+because an unrelated re-render would refresh a stale display and make a broken
+case look like it works; for the same reason the shallow panel's "scores actually
+in the array" is a function, not a `computed` that would cache the wrong answer it
+exists to expose.
+
+Known gaps carried into item 5: there is still no Playwright spec, because E2E is
+unwired from CI and a test added there would be an unrun file rather than a gate —
+the browser run above was manual verification that will not re-run. `assertTracked`
+is unconditional rather than dev-gated, which is the right call for a cheap check
+but means the message ships in production bundles. Like every other demo page here,
+`/reactivity-pitfalls` sits behind the global auth middleware and is unlinked from
 `pages/index.vue`. The item-2 gap is unchanged: `createSharedComposable` is
 per-process, not per-request.
 
