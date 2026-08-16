@@ -143,6 +143,37 @@ Both write through instead of deferring during SSR. A render pass resolves
 before any `setTimeout` fires, so a deferred write on the server is not delayed,
 it is lost — and the markup would then disagree with the client after hydration.
 
+## Reactivity Pitfalls
+
+Vue never tells you that a reactive binding was severed. `count` is a `number`
+whether it came off a live proxy or off a destructure that killed it three lines
+earlier; the view just renders once and then stops, far from the line at fault.
+
+[**docs/reactivity-pitfalls.md**](./docs/reactivity-pitfalls.md) is the guide —
+destructuring loss, `toRefs` vs `toRef`, and the deep-vs-shallow trade — and
+every claim in it is asserted in `tests/unit/reactivity-pitfalls.test.ts`, so a
+Vue upgrade that changes one of those semantics fails CI on the line that
+documents it rather than in a bug report. Live demo: `/reactivity-pitfalls`.
+
+The three that cost the most time:
+
+```ts
+const { count } = state // dead copy — `toRefs(state)` keeps it bound
+toRefs(state).page // undefined if `page` arrived later — `toRef(state, 'page')` does not care
+computed(() => shallowSource.value.n) // caches a *wrong* answer, not a late one
+```
+
+When you are unsure what a value actually is, `utils/reactivityInspect.ts`
+classifies it without reading through it, so calling it inside an effect adds no
+dependency:
+
+```ts
+formatReactivity(state) // 'reactive (deep)'
+formatReactivity(count) // 'plain (not tracked)'  ← the bug
+
+assertTracked(state, 'useFilters(state)') // throws at the boundary instead
+```
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).
