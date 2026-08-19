@@ -74,7 +74,7 @@ actions are pinned by major tag rather than commit digest.
 - [x] `effectScope` for grouped teardown in composables — `createSharedComposable` runs a factory in a detached scope and refcounts consumers, so shared state is built on the first subscribe and stopped on the last release rather than dying with whichever component mounted first; `useScopedEffects` covers the opposite lifetime, disposing the previous group on every `run()` so effects tied to a selection do not survive it; `pages/effect-scope.vue` drives both against real scopes (PR #22)
 - [x] Custom `ref()` with debounce/throttle via `customRef` — `deferredRef` is the shared `customRef` shell (track/trigger, a `draft` of the uncommitted write, `pending` derived from the gap between draft and committed, `flush`/`cancel`, scope-bound teardown) and debounce and throttle differ only in a `CommitPlanner` deciding when a write reaches `commit`; `useDebouncedRef` publishes once the writes stop, `useThrottledRef` at most once per interval, and `pages/custom-ref.vue` counts keystrokes against searches and pointer events against publishes (PR #23)
 - [x] Reactivity pitfalls guide: destructuring loss, `toRefs`, and deep-vs-shallow tradeoffs — `docs/reactivity-pitfalls.md` is the guide and `tests/unit/reactivity-pitfalls.test.ts` is its proof, one test per claim, so a Vue upgrade that changes a semantic fails CI on the line that documents it; `utils/reactivityInspect.ts` classifies any value without reading through it, and `pages/reactivity-pitfalls.vue` runs broken and fixed side by side against the same mutation (PR #24)
-- [ ] Composable design rules: no side effects on import, injectable deps, SSR-safe state
+- [x] Composable design rules: no side effects on import, injectable deps, SSR-safe state — the convention was in `CLAUDE.md` and unenforced, and `useToast` had been breaking it since it was written; `eslint-rules/composable-design.mjs` turns two of the three rules into lint errors over `composables/`, `utils/`, and `stores/`, `tests/unit/composables/import-purity.test.ts` covers what a linter cannot see, and `useToast` moves to `useState` with injectable clock, randomness, and scheduler (PR #25)
 - [ ] `provide`/`inject` with typed `InjectionKey` and a dependency-inversion demo
 - [ ] Render functions + JSX for a dynamic table with slot forwarding
 
@@ -119,6 +119,50 @@ but means the message ships in production bundles. Like every other demo page he
 `/reactivity-pitfalls` sits behind the global auth middleware and is unlinked from
 `pages/index.vue`. The item-2 gap is unchanged: `createSharedComposable` is
 per-process, not per-request.
+
+Item 5 complete as of PR #25 (2026-08-19). All gates green locally and in CI on
+Node 22 and 24 — install, lint, format check, typecheck, test, build; 368 unit
+tests, 46 of them new; coverage 88.99% statements / 96.00% branches / 94.68%
+functions, thresholds unchanged. One devDependency added, `@typescript-eslint/types`
+(types only, no runtime), so the rule file is checked against the real AST under
+`// @ts-check` rather than annotated with `any`.
+
+The item-2 gap named above turned out to be the smaller half of the problem.
+`useToast` held `const toasts = ref<Toast[]>([])` at module scope, which on the
+server is one array per _process_: one visitor's toast renders into the next
+visitor's page, the list never shrinks, and the client's empty copy disagrees
+with the markup it hydrates. `CLAUDE.md` had said "no module-scope mutable
+state" since the repo was created. Nothing checked.
+
+So the deliverable is the enforcement, not the fix. `no-module-state` reports
+module-scope `let`/`var`, the Vue reactive factories, mutable containers, and
+bare object/array literals, accepting `as const` and `Object.freeze`;
+`no-import-side-effects` reports top-level expression statements and top-level
+`await`, matched as an expression so an `await` in an initializer is caught too.
+Both are scoped to `composables/`, `utils/`, and `stores/` — `plugins/` and
+`server/` are excluded because import-time setup is what a plugin is for and
+Nitro handlers already run per-request.
+
+Neither gate was assumed to work. Reverting `useToast` to the module-scope ref
+fails 23 of its 29 tests, including all three isolation cases; planting a
+`setTimeout` inside a top-level initializer is invisible to the lint rule and
+caught by the import-purity test, which is the division of labour the two halves
+exist for. The lint tests drive the project's real `eslint.config.mjs` through
+ESLint's Node API rather than `RuleTester`, so a rule wired to the wrong glob
+fails them.
+
+Known gaps carried into item 6: the two rules cannot see calls in a top-level
+initializer (`z.object({…})` and `connect()` are the same syntax) or effects
+reached through a variable, and `.vue` files are out of scope — all four stated
+in `docs/composable-design-rules.md` rather than left implied. Nothing checks
+that `useState` keys are unique. The `import.meta.server` guard in the default
+toast scheduler is the one uncovered line in the file: it is false in the node
+test environment by construction, which is why branch coverage is 0.39pt below
+the previous run. `createSharedComposable` is still per-process — deliberately
+now, and documented as the one exception to the SSR-safe-state rule. E2E remains
+unwired from CI, so the Chromium run against the production build (login,
+`/ui-primitives`, a toast appearing on click and gone 4.5s later, clean console)
+was manual verification that will not re-run.
 
 ## Phase 7 — Nitro & Server Engine
 
