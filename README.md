@@ -174,6 +174,42 @@ formatReactivity(count) // 'plain (not tracked)'  ← the bug
 assertTracked(state, 'useFilters(state)') // throws at the boundary instead
 ```
 
+## Composable Design Rules
+
+On the server a module is evaluated once per _process_, not once per request, and
+Nuxt auto-imports `composables/`, `utils/`, and `stores/` into every render. So
+module scope is process scope: state held there is shared by every visitor, and
+work done there runs before any request exists.
+
+[**docs/composable-design-rules.md**](./docs/composable-design-rules.md) is the
+guide — no side effects on import, injectable dependencies, SSR-safe state — and
+two of the three are gates rather than advice:
+
+```ts
+const toasts = ref<Toast[]>([]) // ✗ lint: one array for the whole process
+setInterval(refresh, 30_000) // ✗ lint: runs on import, once, for everyone
+const LEVELS = ['info', 'error'] as const // ✓ readonly, so sharing it is safe
+
+export function useToast(deps: Partial<ToastDeps> = {}) {
+  const toasts = useState<Toast[]>('app:toasts', () => []) // ✓ one per request
+}
+```
+
+`eslint-rules/composable-design.mjs` supplies the two rules and runs as part of
+`pnpm lint`; `tests/unit/composables/import-purity.test.ts` covers what a linter
+cannot see, importing every module in those directories with timers, `fetch`,
+listeners, and `console` instrumented and failing if any of them fires.
+
+Dependencies that are awkward to test — clocks, randomness, timers, transports —
+are taken as an optional argument that defaults to the real thing, so
+application code calls `useToast()` unchanged and a test injects only what it
+cares about:
+
+```ts
+const { schedule, advance } = createFakeScheduler()
+const { addToast, toasts } = useToast({ schedule }) // real clock, fake timer
+```
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).
