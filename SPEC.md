@@ -75,50 +75,8 @@ actions are pinned by major tag rather than commit digest.
 - [x] Custom `ref()` with debounce/throttle via `customRef` — `deferredRef` is the shared `customRef` shell (track/trigger, a `draft` of the uncommitted write, `pending` derived from the gap between draft and committed, `flush`/`cancel`, scope-bound teardown) and debounce and throttle differ only in a `CommitPlanner` deciding when a write reaches `commit`; `useDebouncedRef` publishes once the writes stop, `useThrottledRef` at most once per interval, and `pages/custom-ref.vue` counts keystrokes against searches and pointer events against publishes (PR #23)
 - [x] Reactivity pitfalls guide: destructuring loss, `toRefs`, and deep-vs-shallow tradeoffs — `docs/reactivity-pitfalls.md` is the guide and `tests/unit/reactivity-pitfalls.test.ts` is its proof, one test per claim, so a Vue upgrade that changes a semantic fails CI on the line that documents it; `utils/reactivityInspect.ts` classifies any value without reading through it, and `pages/reactivity-pitfalls.vue` runs broken and fixed side by side against the same mutation (PR #24)
 - [x] Composable design rules: no side effects on import, injectable deps, SSR-safe state — the convention was in `CLAUDE.md` and unenforced, and `useToast` had been breaking it since it was written; `eslint-rules/composable-design.mjs` turns two of the three rules into lint errors over `composables/`, `utils/`, and `stores/`, `tests/unit/composables/import-purity.test.ts` covers what a linter cannot see, and `useToast` moves to `useState` with injectable clock, randomness, and scheduler (PR #25)
-- [ ] `provide`/`inject` with typed `InjectionKey` and a dependency-inversion demo
+- [x] `provide`/`inject` with typed `InjectionKey` and a dependency-inversion demo — `defineInjection` in `utils/injection.ts` mints the key and binds provide/inject to it, throwing a named error where Vue warns and returns `undefined` and telling a provided `undefined` apart from nothing at all; the demo is a real feature rather than a toy — `types/todos.ts` owns the `TodoGateway` port, `utils/todoGateway.ts` holds three peers (in-memory, HTTP, and a failure decorator), and `pages/dependency-inversion.vue` swaps between them under a subtree that never learns which it got (PR #26)
 - [ ] Render functions + JSX for a dynamic table with slot forwarding
-
-Item 4 complete as of PR #24 (2026-08-16). All gates green locally and in CI on
-Node 22 and 24 — install, lint, format check, typecheck, test, build; 322 unit
-tests, 67 of them new; coverage 88.91% statements / 96.39% branches, up from
-88.21% / 95.62%, with `utils/reactivityInspect.ts` at 100% on every metric and
-thresholds unchanged. No dependencies added.
-
-The guide is not prose. Every claim in `docs/reactivity-pitfalls.md` has a test
-next to it, and each was written by probing the runtime and transcribing what it
-actually did rather than from memory. Two came back different from expected and
-are in the guide because of it: `toRef` on a genuinely plain object reads
-through — it is a getter over the same object — so it looks right in a debugger
-and tracks nothing, and refs unwrap as object properties of a `reactive` proxy
-but not inside arrays or Maps, so `state.x` and `list[0].value` are both correct
-in the same file.
-
-`describeReactivity` is deliberately coarser than Vue's API in two places. A
-writable `computed` and a `customRef` are reported as `'ref'`, and a read-only
-`computed` and `readonly(ref(x))` both as `'readonlyRef'`, because the public
-predicates cannot separate them — `isProxy` happens to today, but only as a side
-effect of how `ComputedRefImpl` carries its flags. It also never touches `.value`
-and never reads a property, so calling it inside an effect adds no dependency; a
-diagnostic that changed which effects re-run would be worse than none, and two
-tests hold that line.
-
-The demo page was driven in a real Chromium against the production build: SSR
-returns 200, the counters read correctly through hydration and every button, and
-the console is empty — no hydration mismatch, no Vue warnings. Its notification
-claims are measured with `watchSyncEffect` counters rather than read off the DOM,
-because an unrelated re-render would refresh a stale display and make a broken
-case look like it works; for the same reason the shallow panel's "scores actually
-in the array" is a function, not a `computed` that would cache the wrong answer it
-exists to expose.
-
-Known gaps carried into item 5: there is still no Playwright spec, because E2E is
-unwired from CI and a test added there would be an unrun file rather than a gate —
-the browser run above was manual verification that will not re-run. `assertTracked`
-is unconditional rather than dev-gated, which is the right call for a cheap check
-but means the message ships in production bundles. Like every other demo page here,
-`/reactivity-pitfalls` sits behind the global auth middleware and is unlinked from
-`pages/index.vue`. The item-2 gap is unchanged: `createSharedComposable` is
-per-process, not per-request.
 
 Item 5 complete as of PR #25 (2026-08-19). All gates green locally and in CI on
 Node 22 and 24 — install, lint, format check, typecheck, test, build; 368 unit
@@ -163,6 +121,52 @@ now, and documented as the one exception to the SSR-safe-state rule. E2E remains
 unwired from CI, so the Chromium run against the production build (login,
 `/ui-primitives`, a toast appearing on click and gone 4.5s later, clean console)
 was manual verification that will not re-run.
+
+Item 6 complete as of PR #26 (2026-08-20). All gates green locally from a clean
+`node_modules` and in CI on Node 22 and 24 — install, lint, format check,
+typecheck, test, build; 425 unit tests, 54 of them new; coverage 91.61%
+statements / 96.94% branches, up from 88.99% / 96.00%, with `utils/injection.ts`
+and `utils/todoGateway.ts` at 100% on every metric and thresholds unchanged. No
+dependencies added.
+
+Two problems live in this one API and the item is only half done if they are
+conflated. Prop drilling is plumbing. Dependency inversion is design: a
+component that calls `$fetch('/api/todos')` depends on the network, so it only
+runs where the network, a database and a session all exist. `InjectionKey<T>`
+solves the first and half of the second — it types the value but not its
+absence, so `inject(key)` is `T | undefined` for something mandatory in every
+real render, which is how the pattern degenerates into `inject(key)!`.
+`defineInjection` closes that: `inject()` throws at the injection site naming
+the key, "not provided" is a private symbol rather than `undefined` (so
+`isProvided`/`injectOr` stay correct for a nullable `T`), and being called
+outside a setup context is a different message from nobody having provided it.
+
+The port is the deliverable, not the components. `createInMemoryTodoGateway` is
+not a mock — it trims titles, rejects blanks and rejects unknown ids exactly as
+the Nitro routes do — which is what lets it back the demo page and the tests
+alike, and `createFaultyTodoGateway` decorates any gateway so the error path is
+something you can look at on purpose. The HTTP adapter is where the wire format
+stops: `updatedAt` is dropped because nothing renders it. What that buys is
+visible in the suite — `useTodoList` is covered through loading, adding,
+toggling, deleting, four failure paths and an out-of-order refresh with no
+`$fetch` stub, no database and mostly no component.
+
+Neither of the two subtle claims was assumed. Removing the refresh generation
+guard, and swapping the missing-value sentinel for `?? undefined`, each fail
+exactly the one test that documents them. Provide/inject itself is tested by
+rendering real trees with `renderToString`, which also pins the SSR claim: a
+provided value lives on the app, and Nuxt builds one app per request.
+
+Known gaps carried into item 7: E2E is still unwired from CI, so the Chromium
+run against the production build (in-memory board seeded, add/toggle/delete
+tracked in `TodoStats` three levels below the provider, the flaky adapter's
+second Add rejecting with the typed text kept, the HTTP adapter surfacing a 500
+from a database that is not running) was manual verification that will not
+re-run. `/dependency-inversion` sits behind the global auth middleware and is
+unlinked from `pages/index.vue`, like every demo page here. No plugin ships an
+app-wide default gateway — the page provides at the subtree instead, and
+`TodoGatewayProvider` reads its prop once on purpose, so switching adapters
+costs a remount. `createSharedComposable` is still per-process.
 
 ## Phase 7 — Nitro & Server Engine
 
