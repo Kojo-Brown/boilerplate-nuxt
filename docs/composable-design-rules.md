@@ -117,8 +117,12 @@ and anything that talks to the network. Vue's own APIs (`ref`, `watch`,
 
 This rule covers dependencies of a single call. For a dependency a whole
 component subtree shares, the parameter has to be threaded through every layer
-between, and `provide`/`inject` with a typed `InjectionKey` is the better tool —
-not yet used here.
+between, and `provide`/`inject` with a typed `InjectionKey` is the better tool:
+`defineInjection` in [`utils/injection.ts`](../utils/injection.ts), used by the
+todo feature and explained in [`docs/provide-inject.md`](./provide-inject.md).
+The two compose rather than compete — `createTodoList(gateway)` takes its
+dependency as an argument, and `provideTodoList()` is the one layer above it
+that knows about injection at all.
 
 ---
 
@@ -169,6 +173,7 @@ module-scope version those assertions fail.
 | Server data keyed by a request                 | `useAsyncData` / `useFetch`             |
 | Domain state with actions and getters          | a Pinia store (per-app, same guarantee) |
 | A client-only resource outliving one component | `createSharedComposable` from `utils/`  |
+| A dependency an ancestor picks for a subtree   | `defineInjection` from `utils/`         |
 | Scratch state inside one call                  | a plain `ref` **inside** the composable |
 
 `createSharedComposable` is the one entry that is deliberately _not_

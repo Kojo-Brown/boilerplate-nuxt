@@ -210,6 +210,35 @@ const { schedule, advance } = createFakeScheduler()
 const { addToast, toasts } = useToast({ schedule }) // real clock, fake timer
 ```
 
+## provide / inject and Dependency Inversion
+
+A component that calls `$fetch('/api/todos')` depends on the network, so it only
+runs where the network, a database, and a session all exist. Behind a port it
+depends on an interface instead, and an ancestor decides which implementation
+that is.
+
+[**docs/provide-inject.md**](./docs/provide-inject.md) is the guide. `types/todos.ts`
+declares the `TodoGateway` port, `utils/todoGateway.ts` holds the adapters —
+in-memory, HTTP, and a decorator that makes chosen operations fail — and
+`composables/useTodoList.ts` depends on the port and nothing else. Live demo:
+`/dependency-inversion`, which swaps the adapter under a running UI.
+
+`defineInjection` in `utils/injection.ts` types both ends of the wiring from one
+`InjectionKey`, and fails loudly where Vue returns `undefined`:
+
+```ts
+export const todoGatewayInjection = defineInjection<TodoGateway>('todos.gateway')
+
+todoGatewayInjection.provide(createInMemoryTodoGateway()) // rejects anything else
+const gateway = todoGatewayInjection.inject() // TodoGateway, or a named throw
+todoGatewayInjection.provideTo(nuxtApp.vueApp, gateway) // app-wide: per request
+```
+
+What the seam buys is visible in the suite: `useTodoList` is covered through
+loading, adding, toggling, deleting, four failure paths and an out-of-order
+refresh with no `$fetch` stub, no database, and mostly no component — the test
+passes a gateway in.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).
