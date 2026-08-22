@@ -239,6 +239,43 @@ loading, adding, toggling, deleting, four failure paths and an out-of-order
 refresh with no `$fetch` stub, no database, and mostly no component — the test
 passes a gateway in.
 
+## Render Functions and JSX
+
+A template describes a fixed tree. A table whose columns arrive as data has no
+fixed tree: every `<th>` and `<td>` comes from mapping an array, and each cell
+picks its content from a slot whose _name is computed_ — `cell:<column id>`.
+That is what a render function is for.
+
+[**docs/render-functions.md**](./docs/render-functions.md) is the guide, and is
+as much about when to keep the template as when not to.
+`components/DataTable.tsx` is the table, `utils/dataTable.ts` is its model —
+column definitions, the three-state sort toggle, a stable sort — and
+`pages/render-functions.vue` drives both, toggling columns on and off under a
+component that never named one. The whole per-cell decision is one expression:
+
+```tsx
+const slot = slots[`cell:${column.id}`]
+return <td>{slot ? slot({ row, rowIndex, column, text }) : text}</td>
+```
+
+`components/DataTableSection.tsx` is the wrapper, and the reason
+`utils/slots.ts` exists. It renders a heading and a row count, and forwards
+every other slot to the table below without naming any of them:
+
+```tsx
+h(DataTable<Row>, tableProps, forwardSlots(slots, { except: ['title'] }))
+```
+
+`forwardSlots` returns a proxy rather than a spread, because `ctx.slots` is not
+a snapshot — a parent whose slot sits behind a `v-if` adds the key after the
+first render, and a copy taken in `setup()` would never see it.
+
+Getting the row type all the way to `#cell:status="{ row }"` takes three
+deliberate choices, each documented in the guide: the components are plain
+functional components (`defineComponent` erases the type parameter), their
+runtime prop declarations are name lists (an object declaration pins it), and
+each consumer binds it once with `const InvoiceSection = DataTableSection<Invoice>`.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).
