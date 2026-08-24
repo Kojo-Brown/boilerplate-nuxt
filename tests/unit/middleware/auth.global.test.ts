@@ -62,6 +62,18 @@ describe('auth.global middleware', () => {
       handler({ path: '/register' }, { path: '' })
       expect(mockNavigateTo).not.toHaveBeenCalled()
     })
+
+    it('does not redirect when accessing the public route-rules demo', () => {
+      handler({ path: '/route-rules' }, { path: '' })
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+    })
+
+    it('does not redirect when accessing the prerendered route-rules page', () => {
+      // This is what makes the prerender rule produce the real page instead of a
+      // login redirect at build time.
+      handler({ path: '/route-rules/static' }, { path: '' })
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+    })
   })
 
   describe('authenticated user', () => {
@@ -86,6 +98,13 @@ describe('auth.global middleware', () => {
 
     it('does not redirect when accessing any other protected path', () => {
       handler({ path: '/settings' }, { path: '' })
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+    })
+
+    it('stays on the public route-rules demo instead of bouncing to /', () => {
+      // A public demo page is not guest-only: being signed in is no reason to
+      // hide it, unlike the login/register forms.
+      handler({ path: '/route-rules' }, { path: '' })
       expect(mockNavigateTo).not.toHaveBeenCalled()
     })
   })
