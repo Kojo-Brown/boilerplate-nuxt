@@ -1,4 +1,5 @@
 import tailwindcss from '@tailwindcss/vite'
+import { routeRules } from './route-rules.config'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
@@ -11,13 +12,11 @@ export default defineNuxtConfig({
    *   pages/rendering/ssg.vue → definePageMeta({ prerender: true })
    *   pages/rendering/spa.vue → definePageMeta({ ssr: false })
    *
-   * routeRules approach (required for swr / cache headers):
-   *   /rendering/ssr  — default SSR (no rule needed)
-   *   /rendering/isr  — stale-while-revalidate, 60 s TTL
+   * routeRules approach (required for swr / isr / prerender / cors) lives in
+   * `route-rules.config.ts` so it can be unit-tested. See that file and
+   * `docs/nitro-route-rules.md` for the full ISR / SWR / prerender / CORS matrix.
    */
-  routeRules: {
-    '/rendering/isr': { swr: 60 },
-  },
+  routeRules,
 
   modules: ['@nuxt/eslint', 'nuxt-auth-utils', '@pinia/nuxt', '@nuxtjs/color-mode', '@nuxtjs/i18n'],
 
