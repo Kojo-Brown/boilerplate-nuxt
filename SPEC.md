@@ -170,7 +170,7 @@ costs a remount. `createSharedComposable` is still per-process.
 
 ## Phase 7 — Nitro & Server Engine
 
-- [ ] Nitro route rules: per-route ISR, SWR, prerender, and CORS config
+- [x] Nitro route rules: per-route ISR, SWR, prerender, and CORS config (PR #28)
 - [ ] Server middleware with typed `H3Event` context and request-scoped auth
 - [ ] Nitro storage layer (`useStorage`) with a Redis driver for cache and sessions
 - [ ] Cached server functions with `defineCachedEventHandler` + tag invalidation
