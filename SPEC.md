@@ -171,13 +171,75 @@ costs a remount. `createSharedComposable` is still per-process.
 ## Phase 7 — Nitro & Server Engine
 
 - [x] Nitro route rules: per-route ISR, SWR, prerender, and CORS config (PR #28)
-- [ ] Server middleware with typed `H3Event` context and request-scoped auth
+- [x] Server middleware with typed `H3Event` context and request-scoped auth — `middleware/auth.global.ts` is a router guard that ships in the client bundle and `curl` never runs, so until this item every route under `server/api/` answered anyone who asked (PR #29)
 - [ ] Nitro storage layer (`useStorage`) with a Redis driver for cache and sessions
 - [ ] Cached server functions with `defineCachedEventHandler` + tag invalidation
 - [ ] Streaming SSR responses with `sendStream` and progressive rendering
 - [ ] Server-Sent Events endpoint with heartbeat and disconnect cleanup
 - [ ] WebSocket handler via Nitro with JWT handshake auth
 - [ ] Idempotency keys on mutating server routes with a dedupe store
+
+Item 2 complete as of PR #29 (2026-08-26). All gates green locally from a clean
+`node_modules` and in CI on Node 22 and 24 — install, lint, format check,
+typecheck, test, build; 552 unit tests, 43 of them new; coverage 93.09%
+statements / 96.94% branches, up from 91.61% / 96.94%, thresholds unchanged. No
+dependencies added.
+
+The gap this closed was not a missing feature, it was a category error.
+`middleware/auth.global.ts` decides which _pages_ a browser may navigate to; it
+is a Vue Router guard, it lives in the client bundle, and the note in
+`route-rules.config.ts` has said since PR #28 that it never applied to `server/`.
+It was UX that read like a gate. `server/api/todos`, `/uploads`, `/posts` and
+`/metrics` were all open to an unauthenticated `curl`.
+
+`server/utils/access-policy.ts` is now a default-deny table — `/api/**` requires
+a session, every public route is an explicit carve-out with its reason attached —
+and `server/middleware/10.auth.ts` enforces it while resolving the session once
+onto `event.context.auth`. That single resolution is deliberately _not_ sold as a
+performance win: h3 already caches the unsealed session on
+`event.context.sessions`, so five `getUserSession()` calls were one decrypt
+already. What it buys is a check in one place that cannot be forgotten, and a
+`RequestAuth` discriminated union whose authenticated case has a non-nullable
+`user`. `requireAuth(event)` narrows by throwing, and throws two different errors
+on purpose — 401 with no session, 500 naming the policy file when no middleware
+resolved one at all, since a caller cannot fix the latter by logging in.
+
+Two of the public carve-outs are consequences of caching rather than
+conveniences, and they generalise the constraint PR #28 recorded for prerender:
+**a response that is cached or prerendered cannot be per-user**.
+`/api/route-rules/**` is `swr`/`isr`/`cors`, `/api/rendering/**` backs the SSR of
+a page cached for 60s. Neither has a user to forward.
+
+Nothing was assumed. The policy matches `normalisePathname(event.path)` because
+`/api/route-rules/%2e%2e/todos` otherwise reads as public and resolves as
+protected; the built server returns 401 for that spelling and for the double- and
+triple-encoded forms, the trailing slash, the doubled slash and the query-string
+variant. The three new gates were each mutation-checked (flipping the policy
+default to public fails 10 tests, dropping the decode pass fails 6, removing the
+request-id whitelist fails 3), and the `H3EventContext` augmentation was probed
+rather than presumed — `event.context.requestId` reports as `string`, not `any`.
+
+Known gaps carried into item 3. **Authentication, not authorisation**: neither
+`todos` nor `uploads` has a user column, so nothing enforces ownership — row-level
+scoping belongs with the Drizzle work in Phase 8, and `/api/posts` still returns
+generated demo data (its `authorId` is now the session user's id rather than a
+hardcoded `'1'`, which is the one real use of the request-scoped user). There are
+no roles: `RouteAccess` has `public` and `authenticated` and nothing else. Rate
+limiting and CSRF are Phase 9 items and will hang off this middleware. E2E is
+still unwired from CI, so the runtime behaviour was verified by curl against
+`node .output/server/index.mjs` rather than by a test that re-runs — including the
+measurement that makes the `useRequestFetch()` change load-bearing: logged in,
+`/data-patterns` renders 13,096 bytes with its data and 10,597 bytes of errors
+with a plain `$fetch`, both 200, because `useAsyncData` files a 401 under `error`
+instead of throwing. `vitest.config.ts` gained the four project-root aliases Nuxt
+defines so a test can import `~/server/…` the way production does.
+
+One environment note that is not a defect in this change: an incremental
+`pnpm install` over a warm `node_modules` produced a `.nuxt/tsconfig.json`
+mapping `vite/client` to vitest's Vite 7 rather than Nuxt's Vite 8, failing
+`pnpm typecheck` at `nuxt.config.ts:29` on a rollup-vs-rolldown `PluginOption`
+mismatch. It reproduces on unmodified `main`, clears on a fresh install, and CI
+installs fresh — but it is real fragility in `nuxt prepare`'s resolution.
 
 ## Phase 8 — Data & Performance
 
