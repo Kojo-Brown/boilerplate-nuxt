@@ -2,8 +2,16 @@
 import type { Upload } from '~/types/api'
 
 const { state, uploadFile, reset } = useFileUpload()
+
+// `/api/uploads` is behind an `authenticated` rule in
+// server/utils/access-policy.ts. This `useAsyncData` runs during SSR, where a
+// plain `$fetch` would issue a fresh server-to-server request carrying none of
+// the visitor's cookies and get a 401 back. `useRequestFetch()` forwards the
+// incoming request's headers so the SSR read is made as the visitor; on the
+// client it is `$fetch`. See docs/server-middleware.md.
+const requestFetch = useRequestFetch()
 const { data: uploads, refresh } = await useAsyncData<{ data: Upload[] }>('uploads', () =>
-  $fetch('/api/uploads'),
+  requestFetch('/api/uploads'),
 )
 
 const fileInput = ref<HTMLInputElement | null>(null)

@@ -4,6 +4,16 @@ import type { PaginatedResponse } from '~/types/api'
 
 definePageMeta({ layout: false })
 
+// Every endpoint this page reads sits behind an `authenticated` rule in
+// server/utils/access-policy.ts, so the fetch has to carry the session cookie.
+// On the client `$fetch` does that for free; during SSR it does not — the
+// server-side call has no browser attached and would arrive anonymous, and the
+// 401 would surface as a failed render rather than as a login prompt.
+// `useRequestFetch()` is the Nuxt answer: it returns a `$fetch` that forwards
+// the incoming request's headers, so the SSR call is made *as* the visitor. See
+// docs/server-middleware.md.
+const requestFetch = useRequestFetch()
+
 // ─── 1. POLLING ──────────────────────────────────────────────────────────────
 // usePollingData wraps useAsyncData and auto-refreshes on a set interval.
 // The loop pauses when the browser tab is hidden and resumes immediately
@@ -16,7 +26,7 @@ const {
   isPolling,
   startPolling,
   stopPolling,
-} = usePollingData<ServerMetrics>('server-metrics', () => $fetch('/api/metrics'), {
+} = usePollingData<ServerMetrics>('server-metrics', () => requestFetch('/api/metrics'), {
   interval: 5_000,
   pauseOnHidden: true,
 })
@@ -44,7 +54,7 @@ const {
 >(
   // Key includes reactive state → changes to `page` trigger a new fetch
   () => `posts-page-${page.value}-limit-${limit.value}`,
-  () => $fetch('/api/posts', { params: { page: page.value, limit: limit.value } }),
+  () => requestFetch('/api/posts', { params: { page: page.value, limit: limit.value } }),
 )
 
 // ─── 3. DEDUPE ───────────────────────────────────────────────────────────────
@@ -59,14 +69,14 @@ const {
   refresh: refreshShared,
 } = useAsyncData(
   'shared-post-1', // same key used in both panels below
-  () => $fetch('/api/posts/post-1'),
+  () => requestFetch('/api/posts/post-1'),
   { dedupe: 'defer' }, // defer: re-use the in-flight request
 )
 
 // Simulate a second consumer with the identical key — returns the same ref
 const { data: sharedPostConsumer2 } = useAsyncData(
   'shared-post-1',
-  () => $fetch('/api/posts/post-1'),
+  () => requestFetch('/api/posts/post-1'),
   { dedupe: 'defer' },
 )
 
@@ -171,6 +181,10 @@ async function triggerDedupe() {
             <p class="mt-1 text-lg font-semibold text-[var(--color-foreground)]">{{ value }}</p>
           </div>
         </div>
+
+        <p v-if="metrics" class="mt-3 font-mono text-xs text-[var(--color-muted-foreground)]">
+          x-request-id: {{ metrics.requestId }}
+        </p>
       </section>
 
       <!-- ── 2. REFRESH (reactive key) ── -->
