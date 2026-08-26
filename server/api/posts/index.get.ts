@@ -1,6 +1,13 @@
+import { requireAuth } from '~/server/utils/request-auth'
 import type { PaginatedResponse, Post } from '~/types/api'
 
 export default defineEventHandler(async (event): Promise<PaginatedResponse<Post>> => {
+  // `server/middleware/10.auth.ts` has already rejected an anonymous caller —
+  // `/api/**` defaults to `authenticated` and nothing carves this path out. The
+  // call is still here because it is what turns the middleware's guarantee into
+  // a *type*: `user` below is `User`, not `User | undefined`, with no `!`.
+  const { user } = requireAuth(event)
+
   const query = getQuery(event)
   const page = Math.max(1, Number(query['page'] ?? 1))
   const limit = Math.min(100, Math.max(1, Number(query['limit'] ?? 10)))
@@ -13,7 +20,7 @@ export default defineEventHandler(async (event): Promise<PaginatedResponse<Post>
       id: `post-${postNum}`,
       title: `Post ${postNum}`,
       body: `This is the body of post ${postNum}.`,
-      authorId: '1',
+      authorId: user.id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }

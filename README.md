@@ -276,6 +276,38 @@ functional components (`defineComponent` erases the type parameter), their
 runtime prop declarations are name lists (an object declaration pins it), and
 each consumer binds it once with `const InvoiceSection = DataTableSection<Invoice>`.
 
+## Server middleware and request-scoped auth
+
+`middleware/auth.global.ts` is a router guard: it turns a protected navigation
+into a redirect to `/login`. It ships in the client bundle and `curl` never runs
+it, so until this item every route under `server/api/` answered anyone who asked.
+
+[**docs/server-middleware.md**](./docs/server-middleware.md) is the guide.
+`server/utils/access-policy.ts` is a **default-deny** table — `/api/**` requires
+a session and every public route is an explicit carve-out with a reason —
+enforced by `server/middleware/10.auth.ts`, which resolves the session once per
+request onto a typed `event.context.auth`:
+
+```ts
+export default defineEventHandler(async (event) => {
+  const { user } = requireAuth(event)
+  //      ^? User — not User | undefined, no `!`, no cast
+})
+```
+
+`RequestAuth` is a discriminated union, so `requireAuth` narrows by throwing:
+401 when the caller has no session, 500 (naming the policy file) when no
+middleware ever resolved one — the same trade `defineInjection` makes on the app
+side. `server/types/h3.d.ts` augments `H3EventContext` so `requestId`,
+`requestReceivedAt` and `auth` stop being `any`.
+
+Two things that come with turning the gate on, both documented in the guide: the
+policy matches a **normalised** pathname, because
+`/api/route-rules/%2e%2e/todos` otherwise reads as public and resolves as
+protected; and a page reading a protected route during SSR needs
+`useRequestFetch()`, since plain `$fetch` sends no cookies and `useAsyncData`
+turns the resulting 401 into a silently dataless 200.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).

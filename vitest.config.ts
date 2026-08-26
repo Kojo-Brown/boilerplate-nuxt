@@ -1,6 +1,28 @@
+import { fileURLToPath } from 'node:url'
+
 import { defineConfig } from 'vitest/config'
 
+// `new URL('.', …)` keeps a trailing separator; the alias replacement is a
+// prefix substitution, so leaving it produces `<root>//server/…`.
+const root = fileURLToPath(new URL('.', import.meta.url)).replace(/[\\/]+$/, '')
+
 export default defineConfig({
+  // The four aliases Nuxt itself defines for the project root, mirrored from
+  // `.nuxt/tsconfig.server.json`. Vitest runs outside Nuxt, so without them a
+  // module that imports the way the rest of the codebase does — `~/server/utils/…`
+  // — is unresolvable in a test, and the only importable server code is code
+  // written with relative paths. Aliasing here means a test imports a module
+  // exactly as production does, instead of the module being written around the
+  // test runner.
+  resolve: {
+    alias: {
+      '~~': root,
+      '@@': root,
+      '~': root,
+      '@': root,
+    },
+  },
+
   // `.tsx` components need a JSX transform here as well as in the app. Nuxt's
   // Vite builder registers `@vitejs/plugin-vue-jsx` itself; Vitest runs its own
   // Vite, outside Nuxt, where esbuild would otherwise apply its default React
@@ -32,7 +54,14 @@ export default defineConfig({
     setupFiles: ['tests/setup.ts'],
     coverage: {
       provider: 'v8',
-      include: ['composables/**', 'stores/**', 'utils/**', 'middleware/**', 'server/utils/**'],
+      include: [
+        'composables/**',
+        'stores/**',
+        'utils/**',
+        'middleware/**',
+        'server/utils/**',
+        'server/middleware/**',
+      ],
       exclude: ['**/*.d.ts', '**/*.config.*'],
       reporter: ['text', 'json', 'html'],
       thresholds: {
