@@ -172,7 +172,7 @@ costs a remount. `createSharedComposable` is still per-process.
 
 - [x] Nitro route rules: per-route ISR, SWR, prerender, and CORS config (PR #28)
 - [x] Server middleware with typed `H3Event` context and request-scoped auth — `middleware/auth.global.ts` is a router guard that ships in the client bundle and `curl` never runs, so until this item every route under `server/api/` answered anyone who asked (PR #29)
-- [ ] Nitro storage layer (`useStorage`) with a Redis driver for cache and sessions
+- [x] Nitro storage layer (`useStorage`) with a Redis driver for cache and sessions — mounted at runtime from `runtimeConfig`, because Nitro's `storage` config is serialised into the build and would bake a Redis URL into `.output/` (PR #30)
 - [ ] Cached server functions with `defineCachedEventHandler` + tag invalidation
 - [ ] Streaming SSR responses with `sendStream` and progressive rendering
 - [ ] Server-Sent Events endpoint with heartbeat and disconnect cleanup
@@ -240,6 +240,66 @@ mapping `vite/client` to vitest's Vite 7 rather than Nuxt's Vite 8, failing
 `pnpm typecheck` at `nuxt.config.ts:29` on a rollup-vs-rolldown `PluginOption`
 mismatch. It reproduces on unmodified `main`, clears on a fresh install, and CI
 installs fresh — but it is real fragility in `nuxt prepare`'s resolution.
+
+Item 3 complete as of PR #30 (2026-08-28). All gates green from a deleted
+`node_modules` and in CI on Node 22 and 24 — install (`--frozen-lockfile
+--strict-peer-dependencies`), lint, format check, typecheck, test, build; 630
+unit tests, 78 of them new; coverage 93.96% statements / 97.35% branches, up from
+93.09% / 96.94%, thresholds unchanged. Two runtime dependencies added:
+`unstorage` and `ioredis`, the latter pinned to `^5.11.1` rather than the current
+6.0.0 because `unstorage`'s peer range is `^5.4.2` and CI installs strictly.
+
+The mount happens in a Nitro plugin at startup, not in `nuxt.config.ts`, and that
+is the whole design. Nitro's `storage` config is serialised into the build, so a
+Redis URL written there — or read there from `process.env`, the same mistake with
+an extra step — ships inside `.output/` and pins one image to one Redis. The URL
+is `runtimeConfig.redis.url`; `server/utils/storage.ts` turns config into a mount
+plan and is where every decision lives, and `server/plugins/storage.ts` is the
+thin part that applies it.
+
+`cache` is not this app's base. Nitro writes to it, which means the `swr`/`isr`
+rules from PR #28 were caching **per process**: two instances had two independent
+caches, so a client saw a stale response and a fresh one alternately, and a
+rolling restart discarded both. That is fixed by mounting it, and nothing here
+writes to it — `defineCachedEventHandler` is item 4.
+
+`sessions` is new, and closes the gap PR #29 left open in the other direction.
+That item made the 401 true; it could not make a session _end_. Sealed cookies
+live in the browser, so `clear()` is a request, not a revocation — a copy taken
+beforehand kept working until `maxAge` elapsed. The registry stores one record
+per session keyed `<userId>:<sessionId>`, sign-in writes it,
+`/api/auth/logout` sets `revokedAt`, and `10.auth.ts` rejects a revoked session.
+The key leads with the user id so "sign out everywhere" is a prefix scan of one
+user rather than of the store.
+
+Two trades, both stated in `docs/nitro-storage.md` rather than left to be found.
+**Unconfigured is supported; misconfigured is fatal** — no URL keeps Nitro's
+per-process driver, which is right for dev and one instance, but a URL that is
+set and unusable throws at boot, because a server that starts, passes staging and
+then silently splits its cache and registry per instance is the worse failure.
+**A missing record is `unknown` and passes** — fail-closed would make Redis a
+hard dependency of authentication, signing out every user at once during an
+outage, operator included, and would invalidate every session issued before this
+existed. The costs of that choice are named too: one storage read per
+authenticated request, and revocation only as durable as the base.
+
+Verified against a real `redis-server` on the built output, since the memory
+driver the unit tests use exercises neither expiry nor the driver: login wrote
+`…:sessions:1:<uuid>` and an `swr` request wrote `…:cache:nitro:routes:…`, so both
+bases land in Redis; a cookie captured before logout returned 200 and then 401
+`Session revoked`, with the tombstone's TTL re-derived to the cookie's remaining
+lifetime rather than inheriting the longer mount default;
+`NUXT_REDIS_URL=postgresql://user:hunter2@…` exited 1 without listening and
+without the password appearing in the output; and with no URL the server logged
+the per-process warning once, then served.
+
+Gaps carried into item 4. There is **no UI** for listing or revoking sessions —
+`useAuth().logout('all')` is the only entry point, and a device list wants the
+`provider` and `createdAt` the record already carries. The revocation flow has
+**no Playwright coverage**: CI runs no Redis service, so the end-to-end proof
+above is manual and does not re-run. `revokeAllSessionsForUser` is a `SCAN` and
+is deliberately off the request path. Nothing yet uses the `cache` base directly;
+that starts with `defineCachedEventHandler`.
 
 ## Phase 8 — Data & Performance
 
