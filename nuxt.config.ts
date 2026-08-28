@@ -70,6 +70,17 @@ export default defineNuxtConfig({
     awsAccessKeyId: '',
     awsSecretAccessKey: '',
     s3Bucket: '',
+    redis: {
+      // Unset means "no Redis": Nitro keeps its own per-process driver for the
+      // `cache` and `sessions` bases, which is the right setup for `pnpm dev`
+      // and a single instance. Set NUXT_REDIS_URL to share both across a
+      // deployment. See docs/nitro-storage.md and server/utils/storage.ts.
+      url: '',
+      keyPrefix: 'nuxt',
+      // 0 = no driver-level expiry on cache keys; Nitro's cache entries carry
+      // their own `maxAge`. Set NUXT_REDIS_CACHE_TTL for a hard ceiling.
+      cacheTtlSeconds: 0,
+    },
     session: {
       // Placeholder only — nuxt-auth-utils requires the key to be present in the
       // schema. The real value comes from NUXT_SESSION_PASSWORD at runtime and

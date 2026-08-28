@@ -133,7 +133,42 @@ describe('useAuth', () => {
   })
 
   describe('logout()', () => {
-    it('clears the session and navigates to /login', async () => {
+    it('revokes the session server-side, then clears it and navigates to /login', async () => {
+      // `clear()` alone only drops the cookie in this browser; the sealed session
+      // stays valid on the server until it expires. The POST is what ends it.
+      mockFetch.mockResolvedValueOnce({ ok: true, revoked: 1 })
+      mockClear.mockResolvedValueOnce(undefined)
+      mockNavigateTo.mockResolvedValueOnce(undefined)
+
+      const auth = useAuth()
+      await auth.logout()
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/auth/logout', {
+        method: 'POST',
+        body: { scope: 'current' },
+      })
+      expect(mockClear).toHaveBeenCalledOnce()
+      expect(mockNavigateTo).toHaveBeenCalledWith('/login')
+    })
+
+    it('asks for every session when told to sign out everywhere', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, revoked: 3 })
+      mockClear.mockResolvedValueOnce(undefined)
+      mockNavigateTo.mockResolvedValueOnce(undefined)
+
+      const auth = useAuth()
+      await auth.logout('all')
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/auth/logout', {
+        method: 'POST',
+        body: { scope: 'all' },
+      })
+    })
+
+    it('still signs out locally when the revocation call fails', async () => {
+      // A server that cannot reach its session registry must not strand the user
+      // in a signed-in UI they asked to leave.
+      mockFetch.mockRejectedValueOnce({ data: { message: 'registry unreachable' } })
       mockClear.mockResolvedValueOnce(undefined)
       mockNavigateTo.mockResolvedValueOnce(undefined)
 
@@ -142,6 +177,18 @@ describe('useAuth', () => {
 
       expect(mockClear).toHaveBeenCalledOnce()
       expect(mockNavigateTo).toHaveBeenCalledWith('/login')
+      expect(auth.error.value).toBe('registry unreachable')
+    })
+
+    it('reports a generic reason when the failure carries no message', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Network error'))
+      mockClear.mockResolvedValueOnce(undefined)
+      mockNavigateTo.mockResolvedValueOnce(undefined)
+
+      const auth = useAuth()
+      await auth.logout()
+
+      expect(auth.error.value).toBe('Sign-out completed on this device only.')
     })
   })
 

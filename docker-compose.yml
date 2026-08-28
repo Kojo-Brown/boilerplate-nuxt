@@ -16,6 +16,23 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    # `--appendonly yes` because this Redis holds the session registry as well as
+    # the cache. Losing the cache on restart costs a few slow requests; losing
+    # the registry silently un-revokes every signed-out session.
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   app:
     build:
       context: .
@@ -25,6 +42,7 @@ services:
       - '3000:3000'
     environment:
       NUXT_DATABASE_URL: postgresql://nuxt:nuxt@postgres:5432/boilerplate_nuxt
+      NUXT_REDIS_URL: redis://redis:6379
       NUXT_SESSION_PASSWORD: ${NUXT_SESSION_PASSWORD:?Set NUXT_SESSION_PASSWORD (min 32 chars) in your .env file}
       NUXT_OAUTH_GITHUB_CLIENT_ID: ${NUXT_OAUTH_GITHUB_CLIENT_ID:-}
       NUXT_OAUTH_GITHUB_CLIENT_SECRET: ${NUXT_OAUTH_GITHUB_CLIENT_SECRET:-}
@@ -35,6 +53,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  redis_data:
