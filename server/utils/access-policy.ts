@@ -60,6 +60,17 @@ export const serverAccessRules: Readonly<Record<string, RouteAccess>> = {
   // callers with no cookie on this origin. See docs/nitro-route-rules.md.
   '/api/route-rules/**': 'public',
 
+  // The cached-function demo endpoints, for the same reason as the route-rules
+  // ones above: a `defineCachedEventHandler` response is stored once and served
+  // to every caller, so a route that is cached must not answer differently
+  // depending on who asked. See docs/nitro-cached-functions.md.
+  '/api/cached/**': 'public',
+
+  // — except the one that empties those caches. It is not a read: it costs a
+  // re-render of everything it touches, so leaving it open would be a
+  // cache-stampede button. An exact key beats the wildcard above it.
+  '/api/cached/invalidate': 'authenticated',
+
   // Read during the SSR of `/rendering/isr`, whose HTML is itself cached for 60
   // seconds by a route rule. The render that fills that cache happens on behalf
   // of whoever missed it first, so it has no user to forward — same reasoning as

@@ -5,13 +5,15 @@
  * `useStorage()`, with named *bases* mounted onto it. Two of those bases matter
  * to this app:
  *
- * - **`cache`** is not ours. Nitro writes there itself: the `swr` and `isr`
- *   route rules added in `route-rules.config.ts` store their cached payloads
- *   under `cache:`, and so will `defineCachedEventHandler` when it arrives.
- *   Mounting Redis on it is the whole point — until then, "cached for 60
- *   seconds" meant *per process*, so a two-instance deployment had two
- *   independent caches and a client could see a 60-second-old page and a fresh
- *   one alternately.
+ * - **`cache`** is mostly not ours. Nitro writes there itself: the `swr` and
+ *   `isr` route rules added in `route-rules.config.ts` store their cached
+ *   payloads under `cache:`, and so do the `defineCachedEventHandler` routes in
+ *   `server/api/cached/`. Mounting Redis on it is the whole point — until then,
+ *   "cached for 60 seconds" meant *per process*, so a two-instance deployment
+ *   had two independent caches and a client could see a 60-second-old page and a
+ *   fresh one alternately. The one thing this app writes there itself is the
+ *   cache-tag index (`server/utils/cache-tags.ts`), which is metadata about
+ *   those entries and is meant to be discarded with them.
  * - **`sessions`** is ours, and is the session registry described in
  *   `server/utils/session-store.ts`.
  *
