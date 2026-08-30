@@ -4,10 +4,10 @@ Nitro gives every server process one `unstorage` instance, reachable from server
 code as `useStorage()`, with named **bases** mounted onto it. This app cares
 about two:
 
-| Base       | Written by                                                     | Backed by                                    |
-| ---------- | -------------------------------------------------------------- | -------------------------------------------- |
-| `cache`    | Nitro itself — `swr` / `isr` route rules, and `cachedFunction` | Redis when configured, per-process otherwise |
-| `sessions` | This app — `server/utils/session-store.ts`                     | Redis when configured, per-process otherwise |
+| Base       | Written by                                                                                                      | Backed by                                    |
+| ---------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `cache`    | Nitro itself — `swr` / `isr` route rules and `defineCachedEventHandler` — plus the tag index in `cache-tags.ts` | Redis when configured, per-process otherwise |
+| `sessions` | This app — `server/utils/session-store.ts`                                                                      | Redis when configured, per-process otherwise |
 
 Both are mounted at **runtime** by `server/plugins/storage.ts`, from a plan that
 `server/utils/storage.ts` computes out of `runtimeConfig`.

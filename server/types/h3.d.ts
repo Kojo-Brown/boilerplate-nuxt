@@ -1,3 +1,4 @@
+import type { CachedEntryContext } from '~/server/utils/cache-tags'
 import type { RequestAuth } from '~/server/utils/request-auth'
 
 /**
@@ -17,7 +18,8 @@ import type { RequestAuth } from '~/server/utils/request-auth'
  * what makes them visible on every `H3Event` in the project: middleware,
  * handlers, and `server/utils` alike, with no cast at the boundary.
  *
- * Populated by, and only by, `server/middleware/`:
+ * Populated by `server/middleware/`, plus one member written by the cached-route
+ * wrapper:
  *
  *  - `requestId` / `requestReceivedAt` — `00.request-context.ts`, which runs for
  *    every request, so both are always present by the time a handler executes.
@@ -45,6 +47,14 @@ declare module 'h3' {
      * policy does not manage — read it through `requireAuth(event)`.
      */
     auth?: RequestAuth
+
+    /**
+     * The cache entry this request maps to, resolved by
+     * `server/utils/cached-route.ts` before Nitro decides whether it is a hit.
+     * Present only on routes wrapped in `defineCachedApiHandler`, which is why
+     * it is the one member here `server/middleware/` does not populate.
+     */
+    cachedEntry?: CachedEntryContext
   }
 }
 
