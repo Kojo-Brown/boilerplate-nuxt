@@ -173,7 +173,7 @@ costs a remount. `createSharedComposable` is still per-process.
 - [x] Nitro route rules: per-route ISR, SWR, prerender, and CORS config (PR #28)
 - [x] Server middleware with typed `H3Event` context and request-scoped auth — `middleware/auth.global.ts` is a router guard that ships in the client bundle and `curl` never runs, so until this item every route under `server/api/` answered anyone who asked (PR #29)
 - [x] Nitro storage layer (`useStorage`) with a Redis driver for cache and sessions — mounted at runtime from `runtimeConfig`, because Nitro's `storage` config is serialised into the build and would bake a Redis URL into `.output/` (PR #30)
-- [ ] Cached server functions with `defineCachedEventHandler` + tag invalidation
+- [x] Cached server functions with `defineCachedEventHandler` + tag invalidation — Nitro can cache a response and has no way to end that cache early, so the work was reconstructing the storage key it hashes away, past two silent traps in its own custom-key path (PR #31)
 - [ ] Streaming SSR responses with `sendStream` and progressive rendering
 - [ ] Server-Sent Events endpoint with heartbeat and disconnect cleanup
 - [ ] WebSocket handler via Nitro with JWT handshake auth
@@ -300,6 +300,71 @@ Gaps carried into item 4. There is **no UI** for listing or revoking sessions �
 above is manual and does not re-run. `revokeAllSessionsForUser` is a `SCAN` and
 is deliberately off the request path. Nothing yet uses the `cache` base directly;
 that starts with `defineCachedEventHandler`.
+
+Item 4 complete as of PR #31 (2026-08-30). All gates green locally from a clean
+`node_modules` and in CI on Node 22 and 24 — install, lint, format check,
+typecheck, test, build; 734 unit tests, 182 of them new; coverage 94.31%
+statements / 97.63% branches, up from 93.09% / 96.94%, thresholds unchanged. No
+dependencies added.
+
+`defineCachedEventHandler` was already available and already unusable for
+anything that changes. It caches a response and offers exactly one way to end
+that cache: wait for `maxAge`. There is no `revalidateTag`. So a mutation leaves
+every endpoint built from that data serving the old answer for up to a minute,
+and nothing in Nitro can say otherwise.
+
+The feature is therefore not "call the caching API" — it is **reconstructing the
+storage key**, because invalidation is a `removeItem` and Nitro keys entries on
+`hash(path)`, which does not run backwards. Every route here supplies its own
+key, and two traps sit in Nitro's handling of one, both silent:
+
+- The key is passed through `escapeKey`, which **deletes** every character
+  outside `[A-Za-z0-9_]` rather than encoding it. `page:2` and `page-2` both
+  become `page2`, so two requests that should be separate entries share one — a
+  cache serving the wrong page, with nothing in a log to say so.
+  `encodeKeySegment` emits only characters that survive it, injectively.
+- A custom key of `''` is falsy, and Nitro then falls back to its own path hash.
+  `cacheKeySuffix` never returns one.
+
+A third is in `varies`: Nitro's wrapper returns a custom key immediately and
+never reaches its header hashing, so `varies` and `getKey` together look correct
+and serve one response for every value of the header — an `accept-language` route
+answering French out of the English entry. The wrapper folds the headers into the
+key itself and still forwards `varies`, which separately decides which headers
+the wrapped handler may read.
+
+`server/utils/cache-tags.ts` holds the key composition, the encoding and the tag
+index and has no Nitro dependency, so it is tested against a real in-memory
+`unstorage`; `server/utils/cached-route.ts` is the seam that calls
+`defineCachedEventHandler` and `useStorage`. The index is one key per (tag, entry)
+pair rather than a set per tag, because a set is a read-modify-write and two
+handlers filling different entries under one tag concurrently would lose a write
+— which does not corrupt anything, it just leaves an entry a later invalidation
+silently skips. The tests copy `escapeKey` and the key composition out of
+`nitropack` 2.13.4 and pin the mapping against a live `prefixStorage`, so a
+change in either library fails a test rather than turning invalidation into a
+no-op.
+
+Verified end-to-end against `node .output/server/index.mjs`, not only in unit
+tests: two GETs of the list return one frozen `renderedAt`; `?page=2` is a
+separate entry; an unauthenticated invalidate is 401 and a malformed tag 400;
+invalidating `catalog:4` returns `["app:catalog-item:4.json"]` and leaves the
+list cached; invalidating `catalog` returns all three keys and re-renders both
+routes.
+
+Gaps carried into item 5. Tags are indexed **before** Nitro writes the entry,
+because no hook fires after one — an invalidation landing in that window misses
+the entry it should have caught, as does an entry whose index write failed
+(logged, not fatal: a Redis blip must not 500 every cache miss).
+`invalidateCachedRoute(name)` sweeps the route's whole prefix and is the
+documented backstop for both; the alternative is a write-through wrapper that
+does not use `defineCachedEventHandler` at all and loses its SWR handling,
+`etag`/`last-modified` and single-flight deduplication. The invalidation route
+has **no rate limiting** — a session is the cheap half, the rest belongs with
+Phase 9. **No mutation invalidates anything yet**: `server/api/todos/` is not
+cached, so the wiring is shown in the demo routes and the docs rather than in a
+real write path. And the demo has **no Playwright coverage**, for the same reason
+as PR #30's: a cache-timing assertion in CI is the flaky kind.
 
 ## Phase 8 — Data & Performance
 
