@@ -174,7 +174,7 @@ costs a remount. `createSharedComposable` is still per-process.
 - [x] Server middleware with typed `H3Event` context and request-scoped auth — `middleware/auth.global.ts` is a router guard that ships in the client bundle and `curl` never runs, so until this item every route under `server/api/` answered anyone who asked (PR #29)
 - [x] Nitro storage layer (`useStorage`) with a Redis driver for cache and sessions — mounted at runtime from `runtimeConfig`, because Nitro's `storage` config is serialised into the build and would bake a Redis URL into `.output/` (PR #30)
 - [x] Cached server functions with `defineCachedEventHandler` + tag invalidation — Nitro can cache a response and has no way to end that cache early, so the work was reconstructing the storage key it hashes away, past two silent traps in its own custom-key path (PR #31)
-- [ ] Streaming SSR responses with `sendStream` and progressive rendering
+- [x] Streaming SSR responses with `sendStream` and progressive rendering — `sendStream` pipes a source into `res` and ends the response when it ends, and that is all of it: it never stops when the client goes away, a failure after the first byte cannot become a status code, nothing downstream knows the response is a stream, and an eagerly built source streams nothing (PR #32)
 - [ ] Server-Sent Events endpoint with heartbeat and disconnect cleanup
 - [ ] WebSocket handler via Nitro with JWT handshake auth
 - [ ] Idempotency keys on mutating server routes with a dedupe store
@@ -365,6 +365,60 @@ Phase 9. **No mutation invalidates anything yet**: `server/api/todos/` is not
 cached, so the wiring is shown in the demo routes and the docs rather than in a
 real write path. And the demo has **no Playwright coverage**, for the same reason
 as PR #30's: a cache-timing assertion in CI is the flaky kind.
+
+Item 5 complete as of PR #32 (2026-09-01). All nine checks green — install,
+lint, format check, typecheck, test and build on Node 22 and 24 — and all five
+gates green locally from a deleted `node_modules`; 803 unit tests, 69 of them
+new; coverage 95.38% statements / 96.78% branches, up from 93.09% / 96.94%,
+thresholds unchanged. No dependencies added, and only new files: nothing
+existing was modified.
+
+`sendStream` is a thin adapter — it pipes a source into `event.node.res` and
+ends the response when the source ends — so `server/utils/stream.ts` is the four
+things it leaves to the caller. **It never stops**: nothing watches the request,
+so a client that navigates away leaves the source producing into a closed
+socket. The signal has to come off `res`, not `req` — `req` emits `close` as
+soon as a `GET` has been read, so a signal built on it aborts every stream
+before it sends anything — and `streamFromIterable` calls the source's
+`return()` on abort, which is what runs a generator's `finally`. **Errors have
+nowhere to go**: the status line left with the first chunk, so failure is a
+frame in the body, with a constant message rather than the thrown error's
+(after the first byte there is no handler left to decide what a caller may
+see). The `end` frame exists because a body that stops without a terminator was
+_truncated_, a third outcome that is otherwise indistinguishable from success.
+**Nothing downstream knows it is a stream** without `no-store, no-transform` and
+`x-accel-buffering: no`. And **an eager source is not a stream**: the iterator
+is entered once per value the consumer takes, not drained in `start()`.
+
+Verified against the built server rather than only in unit tests: records 400 ms
+apart under `?delay=400`, `?failAt=3` answering **HTTP 200** with an `error`
+frame after two `item` frames, a disconnect logging
+`ended after 2/20 records (client disconnected)`, and `/api/streaming/shell`
+flushing a 1,289-byte shell at +0 ms with sections at +150 / +1,050 / +2,850 ms.
+
+Gaps carried into item 6. **Backpressure is not honoured on the last hop**: h3
+1.x writes to `res` without awaiting `drain`, so a source faster than the socket
+buffers in the Node response. Documented rather than implied — the fix is
+`Readable.fromWeb(stream).pipe(res)`, which means not using `sendStream`, and
+this item is `sendStream`. The `count`/`delay` clamps in `feed.get.ts` are the
+bound for the demo and are unit-tested as a limit on an unbounded response
+rather than as input tidying. **No Playwright coverage**, like PR #30 and #31:
+the socket-level verification above was manual and will not re-run.
+**Out-of-order streaming is not implemented** — a placeholder filled by a later
+chunk, which is what Suspense boundaries and `<NuxtIsland>` build on top of
+this; section order here is resolution order, because a written chunk cannot be
+moved. Both routes stay under default-deny with no carve-out, which is the
+opposite of `/api/cached/**` and deliberately so: a stored response is shared by
+every caller, a streamed one is rendered per request.
+
+Unrelated, and worth a line before it surprises a future run: an **incremental**
+`pnpm install` over an existing tree can flip pnpm's hoisted
+`.pnpm/node_modules/vite` link from 8.1.5 to 7.3.6, after which
+`nuxt.config.ts:29` typechecks `vite.plugins` against vite 7's `Plugin` while
+`@tailwindcss/vite` returns vite 8's — `TS2322`, on a pristine `main` with no
+changes applied. It disappears on a clean
+`rm -rf node_modules && pnpm install --frozen-lockfile`, which is what CI does,
+so CI has never seen it.
 
 ## Phase 8 — Data & Performance
 
