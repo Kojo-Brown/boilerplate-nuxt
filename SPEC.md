@@ -175,7 +175,7 @@ costs a remount. `createSharedComposable` is still per-process.
 - [x] Nitro storage layer (`useStorage`) with a Redis driver for cache and sessions — mounted at runtime from `runtimeConfig`, because Nitro's `storage` config is serialised into the build and would bake a Redis URL into `.output/` (PR #30)
 - [x] Cached server functions with `defineCachedEventHandler` + tag invalidation — Nitro can cache a response and has no way to end that cache early, so the work was reconstructing the storage key it hashes away, past two silent traps in its own custom-key path (PR #31)
 - [x] Streaming SSR responses with `sendStream` and progressive rendering — `sendStream` pipes a source into `res` and ends the response when it ends, and that is all of it: it never stops when the client goes away, a failure after the first byte cannot become a status code, nothing downstream knows the response is a stream, and an eagerly built source streams nothing (PR #32)
-- [ ] Server-Sent Events endpoint with heartbeat and disconnect cleanup
+- [x] Server-Sent Events endpoint with heartbeat and disconnect cleanup — an idle SSE connection is indistinguishable from a dead one, so every proxy between the handler and the browser culls it on its own timeout and tells neither end; the heartbeat that prevents it has to be emitted _while the source is still being awaited_, and the obvious race consumes a value per beat (PR #33)
 - [ ] WebSocket handler via Nitro with JWT handshake auth
 - [ ] Idempotency keys on mutating server routes with a dedupe store
 
