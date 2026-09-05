@@ -28,6 +28,17 @@
  *   Nuxt's own session plugin and the route guard already do the work; unsealing
  *   the session cookie for every `.js` chunk would be pure overhead.
  *
+ * ## What this table does not cover
+ *
+ * **WebSocket upgrades.** In the Node preset Nitro serves requests through
+ * `toNodeListener(h3App)` and upgrades through a separate `server.on('upgrade',
+ * …)` listener, which resolves a route's crossws hooks by pathname and never
+ * builds an `H3Event`. `server/middleware/10.auth.ts` is not on that path, so no
+ * rule below applies to a handshake — `/api/ws/echo` is `authenticated` here and
+ * that governs only the plain HTTP `GET` (which answers 426). The socket carries
+ * its own gate in `server/utils/ws-handshake.ts`, and it has to: cookie auth on
+ * a handshake is exempt from the same-origin policy. See `docs/websockets.md`.
+ *
  * ## Matching
  *
  * A key is either an exact path (`/api/metrics`) or a prefix ending in `/**`

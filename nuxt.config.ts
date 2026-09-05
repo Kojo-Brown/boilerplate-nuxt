@@ -18,6 +18,21 @@ export default defineNuxtConfig({
    */
   routeRules,
 
+  nitro: {
+    experimental: {
+      // Required for `defineWebSocketHandler` (server/api/ws/echo.ts). Without
+      // it Nitro does not bundle the crossws adapter and never attaches an
+      // `upgrade` listener, so the route answers a WebSocket handshake with the
+      // 426 its HTTP half throws — a failure that looks like a client bug.
+      //
+      // "experimental" is Nitro's flag for the API surface, not for the
+      // transport: it is stable enough to build on, and the flag is what the
+      // Nuxt and Nitro docs both still require. See docs/websockets.md for
+      // which deployment presets support it.
+      websocket: true,
+    },
+  },
+
   modules: ['@nuxt/eslint', 'nuxt-auth-utils', '@pinia/nuxt', '@nuxtjs/color-mode', '@nuxtjs/i18n'],
 
   // Tailwind 4 ships its own Vite plugin. @nuxtjs/tailwindcss is a Tailwind 3
@@ -87,6 +102,21 @@ export default defineNuxtConfig({
       // the server refuses to start without it.
       password: '',
       maxAge: 60 * 60 * 24 * 7,
+    },
+    ws: {
+      // Signing key for WebSocket handshake tickets. Empty means "derive one
+      // from session.password with HKDF", which is the supported default — the
+      // two keys stay cryptographically unrelated either way. Set
+      // NUXT_WS_TICKET_SECRET only to rotate ticket signing independently of the
+      // session cookie. See server/utils/ws-ticket.ts.
+      ticketSecret: '',
+      // Ticket lifetime in seconds, clamped to 1…300. Seconds because a ticket
+      // is a bearer credential that may travel in a URL.
+      ticketTtlSeconds: 30,
+      // Extra origins allowed to open a socket, comma-separated. The request's
+      // own host is always allowed, so same-origin needs no configuration. Set
+      // NUXT_WS_ALLOWED_ORIGINS when a separate front end connects to this API.
+      allowedOrigins: '',
     },
   },
 })
