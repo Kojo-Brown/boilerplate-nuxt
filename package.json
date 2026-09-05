@@ -35,6 +35,7 @@
     "postgres": "^3.4.5",
     "unstorage": "^1.17.5",
     "ioredis": "^5.11.1",
+    "jose": "^6.2.5",
     "nuxt": "^4.4.0",
     "nuxt-auth-utils": "^0.5.0",
     "vue": "^3.5.0",
