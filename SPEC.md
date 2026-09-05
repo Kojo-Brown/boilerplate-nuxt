@@ -176,7 +176,7 @@ costs a remount. `createSharedComposable` is still per-process.
 - [x] Cached server functions with `defineCachedEventHandler` + tag invalidation — Nitro can cache a response and has no way to end that cache early, so the work was reconstructing the storage key it hashes away, past two silent traps in its own custom-key path (PR #31)
 - [x] Streaming SSR responses with `sendStream` and progressive rendering — `sendStream` pipes a source into `res` and ends the response when it ends, and that is all of it: it never stops when the client goes away, a failure after the first byte cannot become a status code, nothing downstream knows the response is a stream, and an eagerly built source streams nothing (PR #32)
 - [x] Server-Sent Events endpoint with heartbeat and disconnect cleanup — an idle SSE connection is indistinguishable from a dead one, so every proxy between the handler and the browser culls it on its own timeout and tells neither end; the heartbeat that prevents it has to be emitted _while the source is still being awaited_, and the obvious race consumes a value per beat (PR #33)
-- [ ] WebSocket handler via Nitro with JWT handshake auth
+- [x] WebSocket handler via Nitro with JWT handshake auth — a handshake is exempt from the same-origin policy, so any page anywhere can open a socket to this app and the browser attaches its session cookie; cookie auth on a socket is broken by default, not merely unfashionable, and the ticket exists because the middleware chain the rest of `/api/**` is gated by never runs for an upgrade (PR #34)
 - [ ] Idempotency keys on mutating server routes with a dedupe store
 
 Item 2 complete as of PR #29 (2026-08-26). All gates green locally from a clean
@@ -419,6 +419,92 @@ Unrelated, and worth a line before it surprises a future run: an **incremental**
 changes applied. It disappears on a clean
 `rm -rf node_modules && pnpm install --frozen-lockfile`, which is what CI does,
 so CI has never seen it.
+
+Item 7 complete as of PR #34 (2026-09-05). All nine checks green on Node 22 and
+24 — install (`--frozen-lockfile --strict-peer-dependencies`), lint, format
+check, typecheck, test, build, plus GitGuardian; 1013 unit tests, 144 of them
+new. Coverage 96.19% statements / 95.46% branches / 96.95% functions, against
+95.71 / 97.06 / 97.23 on the previous `main`: statements up, branches down
+1.60pt, thresholds unchanged and not approached. One runtime dependency added,
+`jose@^6.2.5` — already in the tree as a transitive dependency of
+`nuxt-auth-utils` at exactly that version, so the lockfile gains three lines and
+there is no new download. The vite hoisting artifact above did appear during
+this run and cleared on a clean install, exactly as recorded.
+
+The item reads like a transport feature and is a security one. A WebSocket
+upgrade is an ordinary HTTP `GET` until the `101`, and three consequences of it
+no longer being one shape the whole change.
+
+**The handshake is exempt from the same-origin policy.** No preflight, no
+`Access-Control-Allow-Origin`, no opt-in — `evil.example` can run
+`new WebSocket('wss://this-app/api/ws/echo')` and the browser attaches this
+app's session cookie. If the cookie admits the socket, the socket is admitted,
+and the attacker has a full-duplex authenticated channel: read _and_ write,
+unlike a CSRF POST, with no CORS to stop it reading the replies. So the socket
+is admitted by a ticket instead — HS256, 30 seconds, single-use, scoped to one
+channel by `aud` — minted by `POST /api/ws/ticket`, which _is_ an ordinary fetch
+and therefore _is_ governed by CORS. Requiring `content-type: application/json`
+there is a CSRF control, not a nicety: it is not one of the three content types
+CORS calls simple, so a cross-origin caller is preflighted and this app answers
+a preflight for no foreign origin. The `Origin` check is the second layer, not
+the first, and a missing `Origin` is allowed — that is what a non-browser client
+sends, and one can send any value it likes, so requiring it would break every
+CLI and stop nobody.
+
+**The middleware chain does not run.** Nitro serves requests through
+`toNodeListener(h3App)` and upgrades through a separate `upgrade` listener that
+resolves crossws hooks by pathname and never builds an `H3Event`. So
+`server/middleware/10.auth.ts` is not on that path and the default-deny table in
+`server/utils/access-policy.ts` does not apply to a socket at all — the same
+category error PR #29 fixed for `middleware/auth.global.ts`, one protocol
+further along. `authorizeHandshake` re-checks credential, origin, replay and
+session revocation in one place, in that order: origin first because it is free,
+signature before any store read so an unauthenticated caller cannot make the app
+do I/O by opening sockets.
+
+**Rejecting an upgrade is not obvious, and the failure mode is open.** crossws
+proceeds unless the hook returns something with `res.ok === false` — a property
+`Response` has and `ResponseInit` does not. Returning `{ status: 401 }`
+type-checks, reads exactly like a rejection, and opens the socket: the client
+sees `onopen` and the endpoint is unauthenticated. `rejectionResponse()` exists
+so no caller can write that line. Its sibling: `request.context` is installed
+with `defineProperty` and no `writable`, so assigning to it throws — and a throw
+that is not a `Response` rejects the socket with no response at all.
+
+Three smaller things that are wrong by accident and are handled: the signing key
+is derived from `NUXT_SESSION_PASSWORD` with HKDF-SHA256 rather than being a
+second mandatory secret (one secret to deploy, two cryptographically unrelated
+keys; WebCrypto rather than `node:crypto` so it runs on the Cloudflare and Deno
+presets); `algorithms: ['HS256']` and `typ: 'ws-ticket+jwt'` are both pinned,
+because "`jose` happens to refuse `alg: none`" does not survive a dependency
+upgrade; and the frame cap is measured in UTF-8 bytes, since 16,384 "characters"
+is 65,536 bytes of some emoji.
+
+Verified against the built server, not only in unit tests — 23 socket-level
+checks: a handshake carrying only a valid session cookie is 401; a foreign
+`Origin` is 403; a ticket over the subprotocol gets 101 and the 101 echoes the
+_marker_ rather than the token; the same ticket replayed is 401; a forged one is
+401; a plain `GET` is 426; welcome/echo/ping/whoami round-trip with correct
+sequence numbers; a non-JSON frame closes 4000 and a 20 KB frame closes 4002;
+and a ticket whose session was revoked is 401. The three documented environment
+overrides were checked to actually map — `NUXT_WS_TICKET_TTL_SECONDS=90` gave a
+90-second ticket, and `NUXT_WS_ALLOWED_ORIGINS` admitted `https://front.test`
+while refusing `https://other.test`.
+
+Known gaps carried into item 8: **revocation is checked at the handshake, not
+during a connection** — signing out closes no open socket, only stops the next
+one, and closing existing ones needs a pub/sub fan-out to every instance holding
+one; the session _expiry_ sweep is the partial cover. The **replay guard is not
+atomic** (`unstorage` has no compare-and-set, so two handshakes presenting one
+ticket in the same event-loop turn can both see a miss) and **fails open** when
+the store is unreachable, matching `session-store.ts`; both are in
+`docs/websockets.md` rather than left implied, along with the note that the
+guarantee is per-instance until `NUXT_REDIS_URL` is set. No per-user connection
+limit and no rate limit on the ticket route. No `peer.publish()` broadcast —
+that is a channel with subscribers, which this one does not have. E2E remains
+unwired from CI, so the socket-level run above was manual and will not re-run,
+and `/websockets` sits behind the global auth middleware unlinked from
+`pages/index.vue`, like every demo page here.
 
 ## Phase 8 — Data & Performance
 
