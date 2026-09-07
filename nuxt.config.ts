@@ -96,6 +96,19 @@ export default defineNuxtConfig({
       // their own `maxAge`. Set NUXT_REDIS_CACHE_TTL for a hard ceiling.
       cacheTtlSeconds: 0,
     },
+    idempotency: {
+      // How long a completed record stays replayable, in seconds, clamped to
+      // 60…604800 by server/utils/idempotency.ts. A day matches the window
+      // Stripe gives an Idempotency-Key, and is the TTL the `idempotency`
+      // storage base is mounted with. Override with
+      // NUXT_IDEMPOTENCY_RETENTION_SECONDS.
+      retentionSeconds: 60 * 60 * 24,
+      // How long an in-flight claim is honoured before a retry may take it over,
+      // clamped to 5…600. This is how long a key stays stuck after a process
+      // dies mid-handler, so it wants to be comfortably longer than the slowest
+      // wrapped handler and no longer. NUXT_IDEMPOTENCY_CLAIM_TIMEOUT_SECONDS.
+      claimTimeoutSeconds: 60,
+    },
     session: {
       // Placeholder only — nuxt-auth-utils requires the key to be present in the
       // schema. The real value comes from NUXT_SESSION_PASSWORD at runtime and
