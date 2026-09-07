@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest'
 
+import { DEFAULT_RETENTION_SECONDS, MIN_RETENTION_SECONDS } from '~/server/utils/idempotency'
 import {
   CACHE_BASE,
+  IDEMPOTENCY_BASE,
   SESSIONS_BASE,
   assertRedisUrl,
+  joinBases,
   resolveStorageMounts,
   storageBootWarning,
   toTtlSeconds,
@@ -82,11 +85,11 @@ describe('assertRedisUrl', () => {
 })
 
 describe('resolveStorageMounts', () => {
-  it('mounts nothing and defaults both bases when no URL is configured', () => {
+  it('mounts nothing and defaults every base when no URL is configured', () => {
     const plan = resolveStorageMounts(config())
 
     expect(plan.redisMounts).toEqual([])
-    expect(plan.defaultedBases).toEqual([CACHE_BASE, SESSIONS_BASE])
+    expect(plan.defaultedBases).toEqual([CACHE_BASE, SESSIONS_BASE, IDEMPOTENCY_BASE])
   })
 
   it('treats a whitespace-only URL as unset', () => {
@@ -95,19 +98,23 @@ describe('resolveStorageMounts', () => {
     expect(resolveStorageMounts(config({ redis: { url: '   ' } })).redisMounts).toEqual([])
   })
 
-  it('mounts both bases when a URL is configured', () => {
+  it('mounts every base when a URL is configured', () => {
     const plan = resolveStorageMounts(config({ redis: { url: REDIS_URL } }))
 
-    expect(plan.redisMounts.map((mount) => mount.base)).toEqual([CACHE_BASE, SESSIONS_BASE])
+    expect(plan.redisMounts.map((mount) => mount.base)).toEqual([
+      CACHE_BASE,
+      SESSIONS_BASE,
+      IDEMPOTENCY_BASE,
+    ])
     expect(plan.defaultedBases).toEqual([])
   })
 
-  it('keeps the two bases in separate key namespaces so they can share a database', () => {
+  it('keeps the bases in separate key namespaces so they can share a database', () => {
     const plan = resolveStorageMounts(config({ redis: { url: REDIS_URL } }))
     const prefixes = plan.redisMounts.map((mount) => mount.options.base)
 
-    expect(prefixes).toEqual(['nuxt:cache', 'nuxt:sessions'])
-    expect(new Set(prefixes).size).toBe(2)
+    expect(prefixes).toEqual(['nuxt:cache', 'nuxt:sessions', 'nuxt:idempotency'])
+    expect(new Set(prefixes).size).toBe(3)
   })
 
   it('honours a configured key prefix, so two apps can share one Redis', () => {
@@ -116,6 +123,7 @@ describe('resolveStorageMounts', () => {
     expect(plan.redisMounts.map((mount) => mount.options.base)).toEqual([
       'staging:cache',
       'staging:sessions',
+      'staging:idempotency',
     ])
   })
 
@@ -147,6 +155,36 @@ describe('resolveStorageMounts', () => {
     // Never `undefined`: a session record with no expiry is a leak, and on the
     // Redis driver an absent TTL means the key is kept forever.
     expect(sessions?.options.ttl).toBeGreaterThan(0)
+  })
+
+  it('gives the idempotency mount the configured retention as its TTL', () => {
+    const plan = resolveStorageMounts(
+      config({ redis: { url: REDIS_URL }, idempotency: { retentionSeconds: 3600 } }),
+    )
+    const idempotency = plan.redisMounts.find((mount) => mount.base === IDEMPOTENCY_BASE)
+
+    expect(idempotency?.options.ttl).toBe(3600)
+  })
+
+  it('clamps the idempotency TTL through the module that owns the setting', () => {
+    // The driver TTL and the TTL written on each record have to agree; taking
+    // both from `resolveIdempotencySettings` is what makes that structural
+    // rather than a pair of numbers someone has to keep in step. A retention of
+    // one second is clamped, so the mount gets the floor, not the 1.
+    const plan = resolveStorageMounts(
+      config({ redis: { url: REDIS_URL }, idempotency: { retentionSeconds: 1 } }),
+    )
+    const idempotency = plan.redisMounts.find((mount) => mount.base === IDEMPOTENCY_BASE)
+
+    expect(idempotency?.options.ttl).toBe(MIN_RETENTION_SECONDS)
+  })
+
+  it('gives idempotency a bounded TTL with no idempotency config at all', () => {
+    const plan = resolveStorageMounts({ redis: { url: REDIS_URL } })
+    const idempotency = plan.redisMounts.find((mount) => mount.base === IDEMPOTENCY_BASE)
+
+    // A record that never expires answers a key the client reused months ago.
+    expect(idempotency?.options.ttl).toBe(DEFAULT_RETENTION_SECONDS)
   })
 
   it('leaves the cache mount without a driver TTL by default', () => {
@@ -194,11 +232,29 @@ describe('storageBootWarning', () => {
     expect(storageBootWarning(resolveStorageMounts(config()), true)).toBeNull()
   })
 
-  it('warns a built server that its cache and sessions are per-process', () => {
+  it('warns a built server that every base is per-process, and names all three', () => {
     const warning = storageBootWarning(resolveStorageMounts(config()), false)
 
     expect(warning).toContain('NUXT_REDIS_URL')
     expect(warning).toContain(CACHE_BASE)
     expect(warning).toContain(SESSIONS_BASE)
+    expect(warning).toContain(IDEMPOTENCY_BASE)
+  })
+
+  it.each([
+    [[], ''],
+    [['cache'], 'cache'],
+    [['cache', 'sessions'], 'cache and sessions'],
+    [['cache', 'sessions', 'idempotency'], 'cache, sessions and idempotency'],
+  ])('names %j as %j', (bases, expected) => {
+    expect(joinBases(bases)).toBe(expected)
+  })
+
+  it('reads as a list rather than a chain of "and"s', () => {
+    // Cosmetic on its own, but the warning is the only line an operator sees
+    // about this, and `a and b and c` reads like two separate claims.
+    const warning = storageBootWarning(resolveStorageMounts(config()), false)
+
+    expect(warning).toContain('cache, sessions and idempotency')
   })
 })

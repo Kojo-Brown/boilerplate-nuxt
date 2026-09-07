@@ -1,3 +1,8 @@
+import {
+  resolveIdempotencySettings,
+  type IdempotencyRuntimeConfig,
+} from '~/server/utils/idempotency'
+
 /**
  * The Nitro storage layer — which key-value bases exist, and what backs them.
  *
@@ -16,6 +21,12 @@
  *   those entries and is meant to be discarded with them.
  * - **`sessions`** is ours, and is the session registry described in
  *   `server/utils/session-store.ts`.
+ * - **`idempotency`** is ours, and is the dedupe store described in
+ *   `server/utils/idempotency.ts`. It is a third base rather than a prefix on
+ *   `cache` because the two have opposite lifecycles: a cache entry is
+ *   *designed* to be discardable, and an operator flushing the cache namespace
+ *   to force a re-render would, on a shared base, also erase the record of which
+ *   payments had already been taken.
  *
  * ## Why this is mounted at runtime and not in `nuxt.config.ts`
  *
@@ -45,11 +56,12 @@
  * throws instead.
  */
 
-/** The bases this app mounts. Nitro owns `cache`; `sessions` is ours. */
+/** The bases this app mounts. Nitro owns `cache`; the other two are ours. */
 export const CACHE_BASE = 'cache'
 export const SESSIONS_BASE = 'sessions'
+export const IDEMPOTENCY_BASE = 'idempotency'
 
-export type StorageBase = typeof CACHE_BASE | typeof SESSIONS_BASE
+export type StorageBase = typeof CACHE_BASE | typeof SESSIONS_BASE | typeof IDEMPOTENCY_BASE
 
 /** Redis URL schemes `ioredis` understands. `rediss:` is TLS. */
 const REDIS_PROTOCOLS = new Set(['redis:', 'rediss:'])
@@ -66,7 +78,7 @@ const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24
  * Nuxt's own coercion recognises the default's type, and a `NUXT_REDIS_CACHE_TTL`
  * that stayed `"300"` would be handed to `ioredis` as a TTL it cannot use.
  */
-export interface StorageRuntimeConfig {
+export interface StorageRuntimeConfig extends IdempotencyRuntimeConfig {
   readonly redis?: {
     readonly url?: string
     readonly keyPrefix?: string
@@ -158,7 +170,7 @@ export function resolveStorageMounts(config: StorageRuntimeConfig): StorageMount
   const url = config.redis?.url?.trim() ?? ''
 
   if (url === '') {
-    return { redisMounts: [], defaultedBases: [CACHE_BASE, SESSIONS_BASE] }
+    return { redisMounts: [], defaultedBases: [CACHE_BASE, SESSIONS_BASE, IDEMPOTENCY_BASE] }
   }
 
   assertRedisUrl(url)
@@ -166,6 +178,9 @@ export function resolveStorageMounts(config: StorageRuntimeConfig): StorageMount
   const prefix = config.redis?.keyPrefix?.trim() || 'nuxt'
   const sessionTtl = toTtlSeconds(config.session?.maxAge, DEFAULT_SESSION_TTL_SECONDS)
   const cacheTtl = toTtlSeconds(config.redis?.cacheTtlSeconds, 0)
+  // Clamped by the module that owns the setting, so the driver TTL and the TTL
+  // written on each record cannot drift apart.
+  const idempotencyTtl = resolveIdempotencySettings(config).retentionSeconds
 
   const cacheOptions: RedisMountOptions =
     cacheTtl > 0
@@ -187,9 +202,28 @@ export function resolveStorageMounts(config: StorageRuntimeConfig): StorageMount
         base: SESSIONS_BASE,
         options: { url, base: `${prefix}:${SESSIONS_BASE}`, ttl: sessionTtl },
       },
+      // The dedupe store. Its TTL is the retention window itself rather than a
+      // backstop: a record's whole purpose is to expire, and a record that
+      // outlived its window would answer a key a client has long since reused.
+      {
+        base: IDEMPOTENCY_BASE,
+        options: { url, base: `${prefix}:${IDEMPOTENCY_BASE}`, ttl: idempotencyTtl },
+      },
     ],
     defaultedBases: [],
   }
+}
+
+/**
+ * `a`, `a and b`, `a, b and c` — the boot warning names every defaulted base.
+ *
+ * Exported only so a test can pin it: today it is always called with all three
+ * bases, so the shorter cases are exercised nowhere else, and `a and b and c` is
+ * the reading an operator would take as two separate claims.
+ */
+export function joinBases(bases: readonly string[]): string {
+  if (bases.length <= 1) return bases.join('')
+  return `${bases.slice(0, -1).join(', ')} and ${bases[bases.length - 1]}`
 }
 
 /**
@@ -206,8 +240,10 @@ export function storageBootWarning(plan: StorageMountPlan, dev: boolean): string
   if (plan.redisMounts.length > 0 || dev) return null
 
   return (
-    `Nitro storage: ${plan.defaultedBases.join(' and ')} are on the built-in per-process ` +
+    `Nitro storage: ${joinBases(plan.defaultedBases)} are on the built-in per-process ` +
     'driver because NUXT_REDIS_URL is unset. Route-rule caches and session revocation ' +
-    'will not be shared between instances. See docs/nitro-storage.md.'
+    'will not be shared between instances, and an Idempotency-Key deduplicates only ' +
+    'against the instance that handled the first attempt — which is not deduplication ' +
+    'at all behind a load balancer. See docs/nitro-storage.md.'
   )
 }

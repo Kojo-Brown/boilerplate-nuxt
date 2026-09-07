@@ -1,8 +1,15 @@
 import { todos, type Todo } from '~/server/db/schema'
+import { defineIdempotentHandler } from '~/server/utils/idempotent-route'
 import { createTodoSchema } from '~/server/utils/todo-schemas'
 import type { ApiResponse } from '~/types/api'
 
-export default defineEventHandler(async (event): Promise<ApiResponse<Todo>> => {
+/**
+ * Creating a todo is the textbook case for an `Idempotency-Key`: nothing in the
+ * request identifies the row, so a retry after a lost response produces a second
+ * one that is indistinguishable from a deliberate duplicate. See
+ * `docs/idempotency.md`.
+ */
+export default defineIdempotentHandler(async (event): Promise<ApiResponse<Todo>> => {
   const body = await readBody(event)
   const parsed = createTodoSchema.safeParse(body)
 

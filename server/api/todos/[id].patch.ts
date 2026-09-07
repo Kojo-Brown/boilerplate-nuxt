@@ -1,9 +1,17 @@
 import { eq } from 'drizzle-orm'
 import { todos, type Todo } from '~/server/db/schema'
+import { defineIdempotentHandler } from '~/server/utils/idempotent-route'
 import { updateTodoSchema } from '~/server/utils/todo-schemas'
 import type { ApiResponse } from '~/types/api'
 
-export default defineEventHandler(async (event): Promise<ApiResponse<Todo>> => {
+/**
+ * An update that sets fields to literal values is already idempotent in effect —
+ * applying it twice leaves the same row. What a key adds here is a stable
+ * *response*: the second attempt returns the first one's row rather than one
+ * carrying a later `updatedAt`, so a client that retries cannot see the resource
+ * change under it. See `docs/idempotency.md`.
+ */
+export default defineIdempotentHandler(async (event): Promise<ApiResponse<Todo>> => {
   const id = getRouterParam(event, 'id')
 
   if (!id) {

@@ -1,13 +1,19 @@
-# Nitro storage, the Redis driver, and the session registry
+# Nitro storage, the Redis driver, and the stores on top of it
 
 Nitro gives every server process one `unstorage` instance, reachable from server
 code as `useStorage()`, with named **bases** mounted onto it. This app cares
-about two:
+about three:
 
-| Base       | Written by                                                                                                      | Backed by                                    |
-| ---------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `cache`    | Nitro itself — `swr` / `isr` route rules and `defineCachedEventHandler` — plus the tag index in `cache-tags.ts` | Redis when configured, per-process otherwise |
-| `sessions` | This app — `server/utils/session-store.ts`                                                                      | Redis when configured, per-process otherwise |
+| Base          | Written by                                                                                                      | Backed by                                    |
+| ------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `cache`       | Nitro itself — `swr` / `isr` route rules and `defineCachedEventHandler` — plus the tag index in `cache-tags.ts` | Redis when configured, per-process otherwise |
+| `sessions`    | This app — `server/utils/session-store.ts`                                                                      | Redis when configured, per-process otherwise |
+| `idempotency` | This app — `server/utils/idempotency.ts`, see `docs/idempotency.md`                                             | Redis when configured, per-process otherwise |
+
+`idempotency` is a base of its own rather than a prefix on `cache` because the
+two have opposite lifecycles: a cache entry is _designed_ to be discardable, and
+an operator flushing the cache namespace to force a re-render must not also erase
+the record of which operations had already run.
 
 Both are mounted at **runtime** by `server/plugins/storage.ts`, from a plan that
 `server/utils/storage.ts` computes out of `runtimeConfig`.
@@ -33,8 +39,13 @@ startup, before the first request. One image, any Redis.
 | `NUXT_REDIS_KEY_PREFIX` | `nuxt`  | Key prefix, so both bases can share one Redis database.     |
 | `NUXT_REDIS_CACHE_TTL`  | `0`     | Hard ceiling in seconds on any cache key. `0` = no ceiling. |
 
-Keys land as `<prefix>:cache:…` and `<prefix>:sessions:…`. Two deployments can
-share a Redis by taking different prefixes.
+The `idempotency` base takes its TTL from `NUXT_IDEMPOTENCY_RETENTION_SECONDS`
+(default one day) rather than from a Redis setting, because for that base the TTL
+_is_ the feature's retention window. See `docs/idempotency.md`.
+
+Keys land as `<prefix>:cache:…`, `<prefix>:sessions:…` and
+`<prefix>:idempotency:…`. Two deployments can share a Redis by taking different
+prefixes.
 
 `docker-compose.yml` runs a Redis with `--appendonly yes` and wires
 `NUXT_REDIS_URL` for the app service, so `docker compose up` gets the configured
@@ -46,8 +57,13 @@ With `NUXT_REDIS_URL` unset, **nothing is mounted** and both bases keep whatever
 Nitro gave them: an fs directory under `.nuxt/` in dev, memory in a built server.
 That is correct for `pnpm dev`, for `pnpm test`, and for a single instance, and
 it is why the app boots with no Redis at all. A built server in that state logs
-one warning at startup saying its cache and sessions are per-process; dev does
-not, because there it is the intended setup.
+one warning at startup naming all three bases; dev does not, because there it is
+the intended setup.
+
+The warning is sharper than it looks for `idempotency`. Split caches cost
+freshness and unreliable revocation costs a signed-out session; a per-process
+dedupe store behind a load balancer means a retry landing on another instance
+finds no record and **executes again**, which is the whole guarantee gone.
 
 A URL that is **set but unusable** is the opposite case, and
 `resolveStorageMounts` throws rather than falling back. Falling back would hand
@@ -138,9 +154,10 @@ still true.
 1. Set `NUXT_REDIS_URL` on every instance. More than one instance without it
    means split caches and unreliable revocation.
 2. Use `rediss://` outside a private network — the URL carries the password.
-3. Give the session registry durability (`--appendonly yes`, or a managed Redis
-   with persistence). Losing the cache on restart costs a few slow requests;
-   losing the registry silently un-revokes every signed-out session.
+3. Give the session and idempotency bases durability (`--appendonly yes`, or a
+   managed Redis with persistence). Losing the cache on restart costs a few slow
+   requests; losing the registry silently un-revokes every signed-out session,
+   and losing the dedupe store lets an in-flight retry execute twice.
 4. Give each deployment sharing a Redis its own `NUXT_REDIS_KEY_PREFIX`.
 5. Watch the startup log for the per-process warning. It is the one line that
    says the deployment is not configured the way it is documented.
