@@ -177,7 +177,7 @@ costs a remount. `createSharedComposable` is still per-process.
 - [x] Streaming SSR responses with `sendStream` and progressive rendering — `sendStream` pipes a source into `res` and ends the response when it ends, and that is all of it: it never stops when the client goes away, a failure after the first byte cannot become a status code, nothing downstream knows the response is a stream, and an eagerly built source streams nothing (PR #32)
 - [x] Server-Sent Events endpoint with heartbeat and disconnect cleanup — an idle SSE connection is indistinguishable from a dead one, so every proxy between the handler and the browser culls it on its own timeout and tells neither end; the heartbeat that prevents it has to be emitted _while the source is still being awaited_, and the obvious race consumes a value per beat (PR #33)
 - [x] WebSocket handler via Nitro with JWT handshake auth — a handshake is exempt from the same-origin policy, so any page anywhere can open a socket to this app and the browser attaches its session cookie; cookie auth on a socket is broken by default, not merely unfashionable, and the ticket exists because the middleware chain the rest of `/api/**` is gated by never runs for an upgrade (PR #34)
-- [ ] Idempotency keys on mutating server routes with a dedupe store
+- [x] Idempotency keys on mutating server routes with a dedupe store — a lost response and a request that never arrived are the same event from the client's side, so the retry every HTTP client already makes is a coin flip between a duplicate and a lost write; the header settles it, and the parts that are not obvious are that a key without a payload fingerprint silently answers the wrong request, that a claim on a store with no compare-and-set narrows the race rather than closing it, and that this is the one store here that must fail closed (PR #35)
 
 Item 2 complete as of PR #29 (2026-08-26). All gates green locally from a clean
 `node_modules` and in CI on Node 22 and 24 — install, lint, format check,
@@ -505,6 +505,79 @@ that is a channel with subscribers, which this one does not have. E2E remains
 unwired from CI, so the socket-level run above was manual and will not re-run,
 and `/websockets` sits behind the global auth middleware unlinked from
 `pages/index.vue`, like every demo page here.
+
+Item 8 complete as of PR #35 (2026-09-07), which closes Phase 7. All eight
+checks green on Node 22 and 24 — install (`--frozen-lockfile
+--strict-peer-dependencies`), lint, format check, typecheck, test, build; 1098
+unit tests, 85 of them new. Coverage 96.50% statements / 95.79% branches against
+96.19 / 95.46 on the previous `main` — both up, thresholds (80/75/80/80)
+unchanged and not approached, and both new modules at 100%. No dependencies
+added, so the lockfile is unchanged.
+
+The problem is not that a mutation runs twice; it is that the client cannot tell
+whether it ran at all. A connection that dies before the response arrives looks
+identical to one that never reached the server, so retrying risks a duplicate and
+not retrying risks losing the write — and every client that retries on its own is
+already making that call unannounced. `server/utils/idempotency.ts` holds the
+rules with no Nitro dependency (tested against a real in-memory `unstorage`) and
+`server/utils/idempotent-route.ts` is the seam, the same split as
+`cache-tags.ts` / `cached-route.ts`. Records sit on a third storage base rather
+than a prefix on `cache`: a cache entry is _designed_ to be discardable, and a
+flush to force a re-render must not erase which operations had already run.
+
+Three decisions carry the feature. **The fingerprint is not optional** — without
+a SHA-256 over method, target and body, a key reused by accident returns the
+first request's response for the second request's payload and the write never
+happens, silently at every layer; that is a 422, and a live duplicate is a 409,
+per `draft-ietf-httpapi-idempotency-key-header`. **The scope leads the store
+key** (`<user id>:<key>`, both encoded), so one caller cannot address another's
+record as a property of the layout rather than of a check — which is also why
+wrapping a route the access policy does not manage raises the 500 naming
+`access-policy.ts`. **Only a 2xx returned normally is stored**; a throw or a
+non-2xx releases the claim, because a validation 4xx re-executes to the same
+answer and a 5xx is precisely when a retry should happen.
+
+All three todo routes are wrapped, not just POST, because idempotency of _effect_
+and of _response_ are different properties and only the first comes free: PATCH
+already leaves the same row but a retry would watch `updatedAt` move under it,
+and DELETE is a 204 once and a 404 forever after, so a client retrying a lost 204
+currently learns that its own delete failed.
+
+Verified against `node .output/server/index.mjs` with a real Postgres, not only
+in unit tests: an identical retry returns 201 with `idempotent-replay: true` and
+a body byte-for-byte equal to the first, one row in the database; the same key
+with a different body or a different route is 422; a malformed key is 400 with
+the handler never entered; two header-less POSTs create two rows and carry no
+replay header; an unauthenticated request is still 401; a repeated DELETE returns
+the 204 it missed while a fresh key on the same row returns 404; a PATCH replayed
+1.2s later returns the identical `updatedAt`; the unwrapped
+`/api/cached/invalidate` is untouched; and the boot warning names all three
+bases. 25 concurrent identical POSTs under one key, three rounds, created exactly
+one row each time (23 × 201, 2 × 409).
+
+Known gaps carried into Phase 8. **The claim is not a lock**: `unstorage` has no
+compare-and-set, so `claimIdempotency` writes and reads back, which narrows
+double execution from the handler's runtime to one storage round trip and does
+not close it — the burst above is evidence the window is small, not proof it is
+empty, and closing it needs `SET NX` through `ioredis`, giving up the
+memory-driver test path and the no-Redis mode with it. **An abandoned claim is
+taken over after `claimTimeoutSeconds`**, which cannot distinguish a dead handler
+from a slow one. **The store fails closed** here (503 + `Retry-After`), unlike
+the session registry, because there the store adds a capability and here it _is_
+the guarantee; a failure on the completion write is logged instead, since the
+mutation already happened. **No client integration** — `utils/api.ts` does not
+send the header and should not, as the server cannot know which calls are one
+logical operation. **No sweep of an interrupted effect**: the record says a
+handler was entered, not what it wrote, so a handler spanning two systems needs
+an outbox. No E2E coverage, like PR #30–#34. The two env overrides were not
+exercised against a live server; their clamping is unit-tested and they use the
+same `runtimeConfig` mechanism as every other setting here.
+
+The vite hoisting artifact recorded after PR #32 appeared again on this run —
+`pnpm typecheck` failing `TS2322` at `nuxt.config.ts` on a pristine `main` before
+any change — and cleared on `rm -rf node_modules && pnpm install
+--frozen-lockfile`, exactly as documented. It is now two for two; a future run
+should reach for the clean install first rather than reading it as a real break.
 
 ## Phase 8 — Data & Performance
 
