@@ -6,10 +6,12 @@ import { resolveStorageMounts, storageBootWarning } from '~/server/utils/storage
  * Mounts the Redis driver onto Nitro's storage at startup.
  *
  * Everything in `server/plugins/` runs once per server process, before the
- * first request. There is only one plugin, so — unlike `server/middleware/`,
- * where the `00.`/`10.` prefixes are load-bearing — this filename carries no
- * ordering and is not numbered. Add a second plugin that has to run after this
- * one and both should be renamed then, not pre-emptively now.
+ * first request. There are two, and neither filename is numbered — unlike
+ * `server/middleware/`, where the `00.`/`10.` prefixes are load-bearing. That
+ * is still deliberate: `outbox-relay.ts` polls Postgres and never touches
+ * `useStorage()`, so it does not care whether these mounts exist yet. Add a
+ * plugin that *does* depend on one of these and all of them should be renamed
+ * then, not pre-emptively now.
  *
  * All of the decisions live in `server/utils/storage.ts`, which is a pure
  * function of runtime config and is unit-tested. This file is the part that
