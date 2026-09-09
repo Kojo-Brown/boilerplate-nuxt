@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm'
 import { todos, type Todo } from '~/server/db/schema'
 import { defineIdempotentHandler } from '~/server/utils/idempotent-route'
+import { enqueueOutbox } from '~/server/utils/outbox-store'
+import { todoUpdatedMessage } from '~/server/utils/todo-events'
 import { updateTodoSchema } from '~/server/utils/todo-schemas'
 import type { ApiResponse } from '~/types/api'
 
@@ -10,6 +12,9 @@ import type { ApiResponse } from '~/types/api'
  * *response*: the second attempt returns the first one's row rather than one
  * carrying a later `updatedAt`, so a client that retries cannot see the resource
  * change under it. See `docs/idempotency.md`.
+ *
+ * The update and its `todo.updated` event share one transaction — see
+ * `docs/outbox.md`. A 404 is thrown from inside it, so a miss writes no event.
  */
 export default defineIdempotentHandler(async (event): Promise<ApiResponse<Todo>> => {
   const id = getRouterParam(event, 'id')
@@ -33,15 +38,20 @@ export default defineIdempotentHandler(async (event): Promise<ApiResponse<Todo>>
   }
 
   const db = useDb()
-  const [updated] = await db
-    .update(todos)
-    .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(todos.id, id))
-    .returning()
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(todos)
+      .set({ ...parsed.data, updatedAt: new Date() })
+      .where(eq(todos.id, id))
+      .returning()
 
-  if (!updated) {
-    throw createError({ statusCode: 404, message: 'Todo not found' })
-  }
+    if (!row) {
+      throw createError({ statusCode: 404, message: 'Todo not found' })
+    }
+
+    await enqueueOutbox(tx, [todoUpdatedMessage(row)])
+    return row
+  })
 
   return {
     data: updated,

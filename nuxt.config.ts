@@ -109,6 +109,47 @@ export default defineNuxtConfig({
       // wrapped handler and no longer. NUXT_IDEMPOTENCY_CLAIM_TIMEOUT_SECONDS.
       claimTimeoutSeconds: 60,
     },
+    outbox: {
+      // Where the relay POSTs each event. Unset means "nowhere": `pnpm dev`
+      // logs events instead so the path is observable, and a built server
+      // refuses to pretend — it warns at boot and does not poll. See
+      // server/utils/outbox.ts and docs/outbox.md.
+      // NUXT_OUTBOX_WEBHOOK_URL.
+      webhookUrl: '',
+      relay: {
+        // Set false on instances that should write outbox rows but not deliver
+        // them — a deployment running the relay in one place rather than in
+        // every web process. NUXT_OUTBOX_RELAY_ENABLED.
+        enabled: true,
+        // Idle poll interval. Only an under-full pass waits: a pass that filled
+        // its batch polls again immediately, so a backlog drains at the
+        // consumer's speed rather than at batchSize per interval. Clamped to
+        // 50…60000. NUXT_OUTBOX_RELAY_POLL_INTERVAL_MS.
+        pollIntervalMs: 1000,
+        // Rows per claim, clamped to 1…500. A batch is published sequentially
+        // and holds its lease for the whole pass.
+        // NUXT_OUTBOX_RELAY_BATCH_SIZE.
+        batchSize: 20,
+        // First retry delay, doubled per attempt and capped, with jitter over
+        // the upper half of the window. Clamped to 100…60000 and
+        // 1000…3600000 respectively; the cap is also floored at the base delay,
+        // since a cap below it would make every retry wait the same amount.
+        // NUXT_OUTBOX_RELAY_BASE_BACKOFF_MS, NUXT_OUTBOX_RELAY_MAX_BACKOFF_MS.
+        baseBackoffMs: 1000,
+        maxBackoffMs: 5 * 60_000,
+        // Attempts before a row is dead-lettered (`failed_at` set, kept for an
+        // operator). Ten at the default backoff is roughly forty minutes of
+        // trying. Clamped to 1…50. NUXT_OUTBOX_RELAY_MAX_ATTEMPTS.
+        maxAttempts: 10,
+        // How long a claim holds a row. Must exceed publishTimeoutMs or a second
+        // relay claims a row the first is still delivering. Clamped to
+        // 1000…600000. NUXT_OUTBOX_RELAY_CLAIM_LEASE_MS.
+        claimLeaseMs: 30_000,
+        // Per-delivery timeout, clamped to 100…60000.
+        // NUXT_OUTBOX_RELAY_PUBLISH_TIMEOUT_MS.
+        publishTimeoutMs: 5_000,
+      },
+    },
     session: {
       // Placeholder only — nuxt-auth-utils requires the key to be present in the
       // schema. The real value comes from NUXT_SESSION_PASSWORD at runtime and
