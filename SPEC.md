@@ -581,7 +581,29 @@ should reach for the clean install first rather than reading it as a real break.
 
 ## Phase 8 — Data & Performance
 
-- [ ] Drizzle transactions with an outbox row + a relay worker
+- [x] Drizzle transactions with an outbox row + a relay worker — the fix
+      `idempotency.ts` names in its own docs and the note after PR #35 repeated:
+      a handler spanning two systems needs an outbox. The three todo routes now
+      write their row and their event in one transaction; a relay claims the
+      rows with `UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED)`, so
+      every instance can run one and they divide the queue. The same statement
+      pushes `available_at` out by a lease, which is how a relay killed
+      mid-publish releases its rows — by expiry, with no reaper. Delivery is
+      at-least-once and says so; each POST carries the row id as an
+      `Idempotency-Key`, the producer's half of making a duplicate absorbable.
+      `toClampedInt` shipped with a bug its own test caught: `Number('')` is 0,
+      not NaN, so `NUXT_OUTBOX_RELAY_POLL_INTERVAL_MS=` would have clamped to
+      the floor and polled twenty times a second. `outbox-store.test.ts` drives
+      the real Drizzle builder through the `pg-proxy` driver to pin the skip
+      locked clause on the emitted SQL — a claim missing it passes every
+      functional test on one process and double-publishes the day a second
+      instance is deployed. Two properties stay out of CI and are stated as
+      such in `docs/outbox.md`: Postgres honouring the lock, and the
+      transaction boundary itself (`pg-proxy` refuses `transaction()`). Both
+      were verified by hand against a local Postgres 16 during the PR — rollback
+      leaves no row, two connections split 20 rows with no overlap, a real HTTP
+      consumer receives the envelope — and both belong to the Testcontainers
+      item below. No E2E coverage, like PR #30–#35 (PR #36)
 - [ ] Optimistic concurrency with a `version` column and conflict UI
 - [ ] `useAsyncData` cache keys, `getCachedData`, and payload-size discipline
 - [ ] Islands / server components for zero-JS content sections
