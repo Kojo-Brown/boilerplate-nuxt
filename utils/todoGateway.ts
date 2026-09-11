@@ -2,7 +2,13 @@ import { createApiClient } from './api'
 import { defineInjection } from './injection'
 
 import type { ApiResponse, PaginatedResponse } from '~/types/api'
-import type { TodoDraft, TodoGateway, TodoGatewayOperation, TodoItem } from '~/types/todos'
+import type {
+  TodoConflict,
+  TodoDraft,
+  TodoGateway,
+  TodoGatewayOperation,
+  TodoItem,
+} from '~/types/todos'
 
 /**
  * The contract every todo consumer injects and every adapter satisfies.
@@ -12,6 +18,49 @@ import type { TodoDraft, TodoGateway, TodoGatewayOperation, TodoItem } from '~/t
  * dependency graph of everything that renders a todo.
  */
 export const todoGatewayInjection = defineInjection<TodoGateway>('todos.gateway')
+
+/**
+ * The rejection a write gets when the stored todo has moved past the version it
+ * was working from.
+ *
+ * An `Error` subclass rather than a returned union, because every other failure
+ * on this port rejects and a caller that forgets to check a union renders an
+ * error object as if it were a todo. What makes it worth distinguishing from a
+ * plain rejection is that it is *not a failure to act on by retrying*: the
+ * request was well-formed and the server was healthy. Somebody else wrote first,
+ * and the only thing that can resolve it is a decision about whose change
+ * survives — which is a question for the user, not for a retry loop.
+ *
+ * Every adapter throws this one type. The HTTP adapter maps a 412 onto it, the
+ * in-memory adapter raises it from its own version check, and a consumer
+ * therefore handles conflicts identically against a database and against a
+ * fixture — see `docs/optimistic-concurrency.md`.
+ */
+export class TodoConflictError extends Error {
+  /** What the caller tried to write, and what it collided with. */
+  readonly conflict: TodoConflict
+
+  constructor(conflict: TodoConflict, message?: string) {
+    super(message ?? defaultConflictMessage(conflict))
+    // Set explicitly: `Error` is a builtin, and a subclass of one gets the base
+    // constructor's name unless it is assigned. Without it, an `error.name`
+    // read anywhere — a log line, a toast, a test — says "Error".
+    this.name = 'TodoConflictError'
+    this.conflict = conflict
+  }
+}
+
+function defaultConflictMessage(conflict: TodoConflict): string {
+  return conflict.current === null
+    ? `Todo "${conflict.id}" was deleted while you were editing it`
+    : `Todo "${conflict.id}" changed while you were editing it: you have version ` +
+        `${conflict.expectedVersion}, it is now at version ${conflict.current.version}`
+}
+
+/** Narrows an unknown rejection to a conflict, for a `catch` that has both. */
+export function isTodoConflictError(error: unknown): error is TodoConflictError {
+  return error instanceof TodoConflictError
+}
 
 /** Options for {@link createInMemoryTodoGateway}. */
 export interface InMemoryTodoGatewayOptions {
@@ -44,11 +93,24 @@ export function createInMemoryTodoGateway(options: InMemoryTodoGatewayOptions = 
 
   let items: TodoItem[] = [...(options.seed ?? [])]
 
-  function indexOf(id: string): number {
+  /**
+   * The in-memory equivalent of `WHERE id = $1 AND version = $2`.
+   *
+   * Enforced here rather than assumed, because "the fake does not bother with
+   * versions" is how a consumer ends up written against a gateway that never
+   * rejects, and the conflict path first runs in production. The
+   * single-threadedness of JavaScript means this store cannot *produce* a race
+   * on its own — which is exactly why the conflict has to be reachable some
+   * other way, and is what `createConflictingTodoGateway` is for.
+   */
+  function requireVersion(id: string, expectedVersion: number): number {
     const index = items.findIndex((item) => item.id === id)
-    if (index === -1) {
-      throw new Error(`Todo "${id}" was not found`)
+    const current = index === -1 ? null : (items[index] ?? null)
+
+    if (current === null || current.version !== expectedVersion) {
+      throw new TodoConflictError({ id, expectedVersion, current })
     }
+
     return index
   }
 
@@ -69,22 +131,30 @@ export function createInMemoryTodoGateway(options: InMemoryTodoGatewayOptions = 
         title,
         completed: false,
         createdAt: now().toISOString(),
+        version: 1,
       }
       items = [...items, created]
       return { ...created }
     },
 
-    setCompleted: async (id: string, completed: boolean): Promise<TodoItem> => {
-      const index = indexOf(id)
-      // Non-null: `indexOf` threw if the id was absent, but
+    setCompleted: async (
+      id: string,
+      completed: boolean,
+      expectedVersion: number,
+    ): Promise<TodoItem> => {
+      const index = requireVersion(id, expectedVersion)
+      // Non-null: `requireVersion` threw if the id was absent, but
       // `noUncheckedIndexedAccess` cannot see that.
-      const updated: TodoItem = { ...items[index]!, completed }
+      const previous = items[index]!
+      // Bumped here, like the database bumps it, so a second write using the
+      // version the caller started with is rejected rather than applied.
+      const updated: TodoItem = { ...previous, completed, version: previous.version + 1 }
       items = items.map((item, position) => (position === index ? updated : item))
       return { ...updated }
     },
 
-    remove: async (id: string): Promise<void> => {
-      const index = indexOf(id)
+    remove: async (id: string, expectedVersion: number): Promise<void> => {
+      const index = requireVersion(id, expectedVersion)
       items = items.filter((_, position) => position !== index)
     },
   }
@@ -101,13 +171,95 @@ interface TodoWire {
   completed: boolean
   createdAt: string
   updatedAt: string
+  version: number
 }
 
 /** The subset of `$fetch` this adapter uses, so a test can pass a function. */
 export type TodoHttpClient = <T>(
   path: string,
-  options?: { method?: string; body?: unknown; params?: Record<string, unknown> },
+  options?: {
+    method?: string
+    body?: unknown
+    params?: Record<string, unknown>
+    headers?: Record<string, string>
+  },
 ) => Promise<T>
+
+/**
+ * The status a failed `If-Match` comes back as — see `[id].patch.ts` for why
+ * 412 and not 409.
+ */
+const PRECONDITION_FAILED = 412
+
+/** The status a write gets when the row is gone: deleted, or never there. */
+const NOT_FOUND = 404
+
+/**
+ * What `ofetch` puts on a rejection, as much of it as this adapter reads.
+ *
+ * Structural rather than an `instanceof FetchError`: the type is not exported
+ * in a form that survives the two copies of `ofetch` a Nuxt app can resolve, and
+ * a test that hands this adapter a plain function should be able to reject with
+ * an object rather than construct a library error.
+ */
+interface HttpRejection {
+  readonly statusCode?: number
+  readonly status?: number
+  readonly data?: { readonly current?: TodoWire | null } | undefined
+}
+
+function asRejection(error: unknown): HttpRejection | null {
+  return typeof error === 'object' && error !== null ? (error as HttpRejection) : null
+}
+
+/**
+ * Turns a rejected conditional write into a {@link TodoConflictError}, or
+ * re-throws.
+ *
+ * A 404 is folded into the same conflict as a 412, with `current: null`. From
+ * the client's side the two are one situation — "the todo you are holding is not
+ * there to write to" — and the difference between "deleted a second ago" and
+ * "never existed" is not one the UI can act on differently. What it must not do
+ * is present it as a transport error: the user edited something that is gone,
+ * and a toast saying "404" tells them nothing about what to do next.
+ */
+function toConflict(error: unknown, id: string, expectedVersion: number): never {
+  const rejection = asRejection(error)
+  const status = rejection?.statusCode ?? rejection?.status
+
+  if (status !== PRECONDITION_FAILED && status !== NOT_FOUND) {
+    throw error
+  }
+
+  const current = rejection?.data?.current
+  throw new TodoConflictError({
+    id,
+    expectedVersion,
+    current: current == null ? null : toItem(current),
+  })
+}
+
+/**
+ * Formats a version as the entity tag the server compares against.
+ *
+ * The quotes are part of the value — an unquoted `4` is not a valid entity tag,
+ * and `server/utils/optimistic-concurrency.ts` rejects it with a 400 rather than
+ * guessing what was meant.
+ */
+function ifMatch(version: number): string {
+  return `"${version}"`
+}
+
+/** Maps the wire shape onto the domain type. Shared by the adapter's reads. */
+function toItem(row: TodoWire): TodoItem {
+  return {
+    id: row.id,
+    title: row.title,
+    completed: row.completed,
+    createdAt: new Date(row.createdAt).toISOString(),
+    version: row.version,
+  }
+}
 
 /** Options for {@link createHttpTodoGateway}. */
 export interface HttpTodoGatewayOptions {
@@ -131,15 +283,6 @@ export function createHttpTodoGateway(options: HttpTodoGatewayOptions = {}): Tod
   // `$fetch`, which only exists once a Nuxt app is running.
   const client = options.client ?? (createApiClient() as unknown as TodoHttpClient)
 
-  function toItem(row: TodoWire): TodoItem {
-    return {
-      id: row.id,
-      title: row.title,
-      completed: row.completed,
-      createdAt: new Date(row.createdAt).toISOString(),
-    }
-  }
-
   return {
     list: async (): Promise<readonly TodoItem[]> => {
       const response = await client<PaginatedResponse<TodoWire>>('/todos', {
@@ -156,18 +299,34 @@ export function createHttpTodoGateway(options: HttpTodoGatewayOptions = {}): Tod
       return toItem(response.data)
     },
 
-    setCompleted: async (id: string, completed: boolean): Promise<TodoItem> => {
-      const response = await client<ApiResponse<TodoWire>>(`/todos/${id}`, {
-        method: 'PATCH',
-        body: { completed },
-      })
-      return toItem(response.data)
+    setCompleted: async (
+      id: string,
+      completed: boolean,
+      expectedVersion: number,
+    ): Promise<TodoItem> => {
+      try {
+        const response = await client<ApiResponse<TodoWire>>(`/todos/${id}`, {
+          method: 'PATCH',
+          body: { completed },
+          headers: { 'if-match': ifMatch(expectedVersion) },
+        })
+        return toItem(response.data)
+      } catch (error) {
+        toConflict(error, id, expectedVersion)
+      }
     },
 
-    remove: async (id: string): Promise<void> => {
-      // The route answers 204, so whatever comes back is not a todo and is
-      // not read. Typed `unknown` rather than `void`, which is not a value.
-      await client<unknown>(`/todos/${id}`, { method: 'DELETE' })
+    remove: async (id: string, expectedVersion: number): Promise<void> => {
+      try {
+        // The route answers 204, so whatever comes back is not a todo and is
+        // not read. Typed `unknown` rather than `void`, which is not a value.
+        await client<unknown>(`/todos/${id}`, {
+          method: 'DELETE',
+          headers: { 'if-match': ifMatch(expectedVersion) },
+        })
+      } catch (error) {
+        toConflict(error, id, expectedVersion)
+      }
     },
   }
 }
@@ -226,14 +385,113 @@ export function createFaultyTodoGateway(
       return inner.create(draft)
     },
 
-    setCompleted: async (id: string, completed: boolean): Promise<TodoItem> => {
+    setCompleted: async (
+      id: string,
+      completed: boolean,
+      expectedVersion: number,
+    ): Promise<TodoItem> => {
       if (shouldFail('setCompleted')) throw new Error(message)
-      return inner.setCompleted(id, completed)
+      return inner.setCompleted(id, completed, expectedVersion)
     },
 
-    remove: async (id: string): Promise<void> => {
+    remove: async (id: string, expectedVersion: number): Promise<void> => {
       if (shouldFail('remove')) throw new Error(message)
-      return inner.remove(id)
+      return inner.remove(id, expectedVersion)
+    },
+  }
+}
+
+/** What the competing writer does ahead of one call. */
+export type CompetingWrite = 'edit' | 'delete' | 'none'
+
+/** Options for {@link createConflictingTodoGateway}. */
+export interface ConflictingTodoGatewayOptions {
+  /**
+   * What the competing writer does, per call, in order. The last entry repeats
+   * once the list runs out — `['edit']` is "somebody gets there first, every
+   * time", and `['edit', 'none']` is "the first attempt loses, the retry lands".
+   *
+   *  - `edit` — another client saves a change first, so the row moves to a newer
+   *    version and there is something to merge against.
+   *  - `delete` — another client removes it, so there is not.
+   *  - `none` — nobody interferes and the call goes through.
+   */
+  readonly script?: readonly CompetingWrite[]
+}
+
+/**
+ * Wraps a {@link TodoGateway} and puts a competing writer in front of its
+ * writes.
+ *
+ * A decorator over the port, like {@link createFaultyTodoGateway}, and it exists
+ * for the same reason: the conflict path is the one branch that cannot be
+ * reached by using the app normally. A genuine conflict needs two clients
+ * writing between one client's read and its write — impossible against the
+ * in-memory adapter, which is single-threaded, and awkward against the HTTP one,
+ * which wants a second session and precise timing.
+ *
+ * What it stages is the *timing*, and nothing else. The competing write is
+ * really performed against the inner gateway, so the row really does move to a
+ * new version, and the rejection the caller gets is the inner gateway's own —
+ * raised by its own version check, carrying its own row. Nothing here fabricates
+ * a conflict, which matters for more than tidiness: a made-up "current" version
+ * that the store had never actually reached would let a resolution succeed in
+ * the dialog and fail against the real adapter, and the gap would only show up
+ * in production.
+ *
+ * The competing writer flips `completed`, because that is the only field the
+ * port can change. A second client renaming the todo is the more vivid demo and
+ * would need a `rename` on the port that nothing else asks for.
+ */
+export function createConflictingTodoGateway(
+  inner: TodoGateway,
+  options: ConflictingTodoGatewayOptions = {},
+): TodoGateway {
+  const { script = ['edit'] } = options
+  let call = 0
+
+  function nextAction(): CompetingWrite {
+    const action = script[Math.min(call, script.length - 1)] ?? 'none'
+    call += 1
+    return action
+  }
+
+  /** Runs the other client's write, if the script says there is one. */
+  async function stage(id: string): Promise<void> {
+    const action = nextAction()
+    if (action === 'none') return
+
+    const existing = (await inner.list()).find((item) => item.id === id)
+    // Nothing to race with. The caller's own call is about to fail on its own,
+    // with the same "there is no such row" conflict it would have got anyway.
+    if (existing === undefined) return
+
+    if (action === 'delete') {
+      await inner.remove(id, existing.version)
+      return
+    }
+
+    await inner.setCompleted(id, !existing.completed, existing.version)
+  }
+
+  return {
+    list: inner.list,
+    create: inner.create,
+
+    setCompleted: async (
+      id: string,
+      completed: boolean,
+      expectedVersion: number,
+    ): Promise<TodoItem> => {
+      await stage(id)
+      // Not wrapped in a conflict of our own making: the inner gateway is now
+      // genuinely ahead of `expectedVersion`, so this rejects by itself.
+      return inner.setCompleted(id, completed, expectedVersion)
+    },
+
+    remove: async (id: string, expectedVersion: number): Promise<void> => {
+      await stage(id)
+      return inner.remove(id, expectedVersion)
     },
   }
 }

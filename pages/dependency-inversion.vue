@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import {
+  createConflictingTodoGateway,
   createFaultyTodoGateway,
   createHttpTodoGateway,
   createInMemoryTodoGateway,
@@ -24,12 +25,14 @@ const SEED: readonly TodoItem[] = [
     title: 'Read docs/provide-inject.md',
     completed: true,
     createdAt: '2026-01-01T09:00:00.000Z',
+    version: 1,
   },
   {
     id: 'seed-2',
     title: 'Swap the adapter and watch nothing else change',
     completed: false,
     createdAt: '2026-01-01T09:05:00.000Z',
+    version: 1,
   },
 ]
 
@@ -67,6 +70,16 @@ const ADAPTERS: readonly AdapterOption[] = [
         operations: ['create'],
         everyNthCall: 2,
         message: 'Could not save the todo — the service rejected it',
+      }),
+  },
+  {
+    id: 'conflicting',
+    label: 'Conflicting',
+    description:
+      'createConflictingTodoGateway(memory, { script: ["edit", "none", "delete"] }) — another decorator over the same port. The first write loses to somebody else\'s edit, the second goes through, the third finds the todo deleted. Tick a checkbox to meet the conflict dialog.',
+    create: () =>
+      createConflictingTodoGateway(createSeededMemoryGateway(), {
+        script: ['edit', 'none', 'delete'],
       }),
   },
   {

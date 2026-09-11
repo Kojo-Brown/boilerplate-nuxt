@@ -17,6 +17,7 @@ const TODO: Todo = {
   completed: false,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:05:00.000Z'),
+  version: 3,
 }
 
 describe('todoCreatedMessage', () => {
@@ -37,6 +38,7 @@ describe('todoCreatedMessage', () => {
       completed: false,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:05:00.000Z',
+      version: 3,
     })
   })
 
@@ -53,21 +55,28 @@ describe('todoUpdatedMessage', () => {
 
     expect(message.eventType).toBe(TODO_UPDATED)
     expect(message.payload).toMatchObject({ completed: true })
-    // `updatedAt` is the row's version clock: a consumer applying events out of
-    // order compares it rather than trusting arrival order.
+    // `version` is the row's clock: a consumer applying events out of order
+    // compares it rather than trusting arrival order. `updated_at` cannot be
+    // used that way — two writes can share a timestamp, and a clock can go
+    // backwards — which is why both are on the payload and only one orders.
+    expect(message.payload['version']).toBe(3)
     expect(message.payload['updatedAt']).toBe('2026-01-01T00:05:00.000Z')
   })
 })
 
 describe('todoDeletedMessage', () => {
-  it('carries the id and when the deleting transaction ran', () => {
-    const message = todoDeletedMessage(TODO.id, new Date('2026-01-02T03:04:05.000Z'))
+  it('carries the id, when the deleting transaction ran, and at what version', () => {
+    const message = todoDeletedMessage(TODO.id, new Date('2026-01-02T03:04:05.000Z'), 3)
 
     expect(message).toEqual({
       aggregateType: TODO_AGGREGATE,
       aggregateId: TODO.id,
       eventType: TODO_DELETED,
-      payload: { id: TODO.id, deletedAt: '2026-01-02T03:04:05.000Z' },
+      // The version is what lets a consumer order the delete against the
+      // updates it has seen. Without it, a `todo.deleted` and a `todo.updated`
+      // arriving out of order leave it guessing — and the guess that
+      // resurrects a deleted row is the one that looks fine in testing.
+      payload: { id: TODO.id, deletedAt: '2026-01-02T03:04:05.000Z', version: 3 },
     })
   })
 })
