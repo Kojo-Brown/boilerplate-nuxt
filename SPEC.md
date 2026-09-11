@@ -604,7 +604,48 @@ should reach for the clean install first rather than reading it as a real break.
       leaves no row, two connections split 20 rows with no overlap, a real HTTP
       consumer receives the envelope — and both belong to the Testcontainers
       item below. No E2E coverage, like PR #30–#35 (PR #36)
-- [ ] Optimistic concurrency with a `version` column and conflict UI
+- [x] Optimistic concurrency with a `version` column and conflict UI — the lost
+      update every read-modify-write handler in this repo had: two people open
+      the same todo, both writes succeed, one change is gone with nothing
+      logged. `todos.version` is an integer the database increments, and the
+      guard is `WHERE id = $1 AND version = $2` **inside the writing
+      statement** — a handler that selects, compares in TypeScript and then
+      updates reads as correct and has only moved the race, which is why
+      `todo-store.ts` exports the statements rather than an `assertVersion`
+      helper and why `todo-store.test.ts` reads the emitted SQL through
+      `pg-proxy`: a missing version predicate passes every functional test on
+      one connection. A counter and not `updated_at`, whose three failure modes
+      (`now()` is the transaction's start time, a shared microsecond, a clock
+      that steps backwards) are each enough on their own. `If-Match` is
+      required on `PATCH`/`DELETE` — 428 without it, because a route accepting
+      both lets every client opt out of the guarantee by forgetting — and a
+      stale write is 412, which keeps it distinguishable from the 409
+      `defineIdempotentHandler` answers for an in-flight key. The 412 carries
+      the current row, re-read inside the failed write's own transaction: a
+      client sent to re-fetch is already behind, and the re-fetch can land
+      after another edit and show a third version nobody wrote. On the client
+      `version` is part of `TodoItem`, every adapter throws one
+      `TodoConflictError`, and `useTodoList` keeps the conflict out of `error`
+      — an error is something a retry might fix, this is a write correctly
+      refused. `keepMine` re-applies on top of _their_ row through the same
+      guarded write and can conflict again; `keepTheirs` is also what
+      dismissing the dialog does, since the list is known stale the moment a
+      conflict is raised. `createConflictingTodoGateway` really performs the
+      competing write rather than fabricating a version the store never
+      reached, so a resolution that works in the dialog cannot fail against a
+      real adapter. Two claims the unit suite cannot reach were run by hand
+      against a local Postgres 16 and are recorded in
+      `docs/optimistic-concurrency.md`: two sessions both reading version 1,
+      the second `UPDATE` blocking on the first's row lock and reporting
+      `UPDATE 0`; and the full request sequence against the built server —
+      201/`ETag: "1"`, 428, 400 for a weak tag, 200/`ETag: "2"`, 412 with the
+      current row, 412 stale delete, 204, 404 with `current: null`, outbox at
+      versions 1, 2, 2 and nothing from the refused writes. The handlers
+      themselves still have no automated test, for the same reason
+      `docs/idempotency.md` and `docs/outbox.md` give: no database in CI, and
+      the Testcontainers item below closes all three. No field-level merge, no
+      live feed of others' edits, no `If-None-Match`, no E2E coverage, like PR
+      #30–#36 (PR #37)
 - [ ] `useAsyncData` cache keys, `getCachedData`, and payload-size discipline
 - [ ] Islands / server components for zero-JS content sections
 - [ ] Core Web Vitals instrumentation reported to an analytics sink
