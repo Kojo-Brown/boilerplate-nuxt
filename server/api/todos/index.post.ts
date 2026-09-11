@@ -1,5 +1,6 @@
 import { todos, type Todo } from '~/server/db/schema'
 import { defineIdempotentHandler } from '~/server/utils/idempotent-route'
+import { versionETag, ETAG_HEADER } from '~/server/utils/optimistic-concurrency'
 import { enqueueOutbox } from '~/server/utils/outbox-store'
 import { todoCreatedMessage } from '~/server/utils/todo-events'
 import { createTodoSchema } from '~/server/utils/todo-schemas'
@@ -43,6 +44,10 @@ export default defineIdempotentHandler(async (event): Promise<ApiResponse<Todo>>
   })
 
   setResponseStatus(event, 201)
+  // A created row is at version 1, and the client is going to want it: the
+  // usual next action on a todo you just made is to complete it, and without
+  // this header that costs a `GET` first.
+  setResponseHeader(event, ETAG_HEADER, versionETag(created.version))
 
   return {
     data: created,

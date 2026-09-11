@@ -30,18 +30,37 @@ export interface TodoEventPayload extends Record<string, unknown> {
   readonly title: string
   readonly completed: boolean
   readonly createdAt: string
+  /** When the row was last written. Informational — {@link version} orders. */
+  readonly updatedAt: string
   /**
    * The row's own version clock. A consumer applying events out of order — see
    * the ordering note in `server/utils/outbox.ts` — compares this rather than
    * arrival order, which is why it is on the payload and not only in the header.
+   *
+   * It is the same counter `If-Match` guards the write with (see
+   * `docs/optimistic-concurrency.md`), and that is what makes it usable here: a
+   * consumer holding version 7 can discard a `todo.updated` carrying 5 without
+   * any knowledge of how the events were routed, because the database is the
+   * only thing that ever issues a number and it only ever issues them in order.
+   * `updated_at` cannot be used that way — two updates can share a timestamp,
+   * and a clock can go backwards.
    */
-  readonly updatedAt: string
+  readonly version: number
 }
 
 /** The body of `todo.deleted`. There is no row left to describe. */
 export interface TodoDeletedPayload extends Record<string, unknown> {
   readonly id: string
   readonly deletedAt: string
+  /**
+   * The version the row was at when it was deleted.
+   *
+   * Carried so a consumer can order the delete against the updates it has seen:
+   * without it, a `todo.deleted` and a `todo.updated` that arrive out of order
+   * would leave the consumer guessing, and the guess that resurrects a deleted
+   * row is the one that looks fine in testing.
+   */
+  readonly version: number
 }
 
 function todoPayload(todo: Todo): TodoEventPayload {
@@ -51,6 +70,7 @@ function todoPayload(todo: Todo): TodoEventPayload {
     completed: todo.completed,
     createdAt: todo.createdAt.toISOString(),
     updatedAt: todo.updatedAt.toISOString(),
+    version: todo.version,
   }
 }
 
@@ -74,12 +94,12 @@ export function todoUpdatedMessage(todo: Todo): OutboxMessage {
   }
 }
 
-/** `todo.deleted` — the id, and when the deleting transaction ran. */
-export function todoDeletedMessage(id: string, deletedAt: Date): OutboxMessage {
+/** `todo.deleted` — the id, when the deleting transaction ran, and at what version. */
+export function todoDeletedMessage(id: string, deletedAt: Date, version: number): OutboxMessage {
   return {
     aggregateType: TODO_AGGREGATE,
     aggregateId: id,
     eventType: TODO_DELETED,
-    payload: { id, deletedAt: deletedAt.toISOString() } satisfies TodoDeletedPayload,
+    payload: { id, deletedAt: deletedAt.toISOString(), version } satisfies TodoDeletedPayload,
   }
 }

@@ -14,6 +14,17 @@ export interface TodoItem {
   completed: boolean
   /** ISO-8601. A string rather than a `Date` so it survives SSR serialization. */
   createdAt: string
+  /**
+   * Which revision of this todo the value describes.
+   *
+   * Part of the domain type rather than an HTTP detail the adapter hides,
+   * because the *caller* is what has to carry it: a write says which version it
+   * believed it was changing, and only the code holding the item knows that. An
+   * adapter that swallowed the version would have to invent one at write time,
+   * which is last-write-wins with extra steps. See
+   * `docs/optimistic-concurrency.md`.
+   */
+  version: number
 }
 
 /** Everything the caller supplies when creating a todo; the rest is the store's. */
@@ -42,10 +53,39 @@ export interface TodoGateway {
   list: () => Promise<readonly TodoItem[]>
   /** Creates a todo and returns it as stored. */
   create: (draft: TodoDraft) => Promise<TodoItem>
-  /** Sets the completed flag and returns the updated todo. */
-  setCompleted: (id: string, completed: boolean) => Promise<TodoItem>
-  /** Removes a todo. Rejects if `id` does not exist. */
-  remove: (id: string) => Promise<void>
+  /**
+   * Sets the completed flag and returns the updated todo.
+   *
+   * @param expectedVersion The {@link TodoItem.version} the caller is working
+   *   from. Rejects with a {@link TodoConflict}-carrying error if the stored
+   *   todo has moved past it — see `docs/optimistic-concurrency.md`. It is a
+   *   required argument and not an optional one on purpose: a default would be
+   *   a default answer to "what did you think you were overwriting", and there
+   *   is no safe one.
+   */
+  setCompleted: (id: string, completed: boolean, expectedVersion: number) => Promise<TodoItem>
+  /**
+   * Removes a todo. Rejects if `id` does not exist, or if the stored todo has
+   * moved past `expectedVersion`.
+   */
+  remove: (id: string, expectedVersion: number) => Promise<void>
+}
+
+/**
+ * What a rejected write found instead of the version the caller expected.
+ *
+ * Carried on the rejection rather than left for the caller to fetch: the client
+ * is already behind at this point, and a re-read would both cost a round trip
+ * and open a second race — it can land after *another* edit, showing a third
+ * version that neither writer ever saw.
+ */
+export interface TodoConflict {
+  /** The todo the write was aimed at. */
+  readonly id: string
+  /** The version the caller said it held. */
+  readonly expectedVersion: number
+  /** The todo as it is stored now, or `null` when it has been deleted. */
+  readonly current: TodoItem | null
 }
 
 /** The operations a {@link TodoGateway} exposes, for policies that name them. */

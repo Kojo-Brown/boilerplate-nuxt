@@ -50,5 +50,10 @@ onMounted(() => {
     <!-- Neither child is passed the list, the gateway, or a callback. -->
     <TodoComposer />
     <TodoList />
+
+    <!-- Rendered unconditionally; it decides for itself whether there is a
+         conflict to show. Gating it on `conflict` here would mean this
+         component knowing about a collision it has no part in resolving. -->
+    <TodoConflictDialog />
   </div>
 </template>

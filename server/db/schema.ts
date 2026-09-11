@@ -7,6 +7,30 @@ export const todos = pgTable('todos', {
   completed: boolean('completed').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  /**
+   * The row's optimistic-concurrency token — see
+   * `server/utils/optimistic-concurrency.ts` and `docs/optimistic-concurrency.md`.
+   *
+   * Every update carries `WHERE version = $expected` and sets `version + 1`, so
+   * two clients that both read version 4 cannot both write version 5: the second
+   * `UPDATE` matches no row and the route answers 412 instead of silently
+   * discarding the first write.
+   *
+   * ## Why a counter and not `updated_at`
+   *
+   * `updated_at` is already on the row and looks like it would do. It does not.
+   * Postgres timestamps have microsecond resolution, so two updates inside the
+   * same microsecond are indistinguishable; `now()` is the *transaction's* start
+   * time, so two concurrent transactions can stamp the same instant however long
+   * they take; and a clock that goes backwards — an NTP step, a restored backup,
+   * a replica promoted mid-flight — makes a stale token compare as fresh. A
+   * counter incremented by the database has none of those properties to lose.
+   *
+   * It is also what the client sends back, so it is a value a human can read in
+   * a failing request: `If-Match: "4"` is a bug report on its own, and an
+   * `If-Match: "2026-01-01T09:00:00.000123Z"` is a formatting argument.
+   */
+  version: integer('version').notNull().default(1),
 })
 
 export type Todo = typeof todos.$inferSelect

@@ -8,14 +8,20 @@ import {
   provideTodoList,
   todoListInjection,
   useTodoList,
+  type TodoListController,
 } from '../../../composables/useTodoList'
-import { createInMemoryTodoGateway, todoGatewayInjection } from '../../../utils/todoGateway'
+import {
+  createConflictingTodoGateway,
+  createInMemoryTodoGateway,
+  todoGatewayInjection,
+  TodoConflictError,
+} from '../../../utils/todoGateway'
 
 import type { TodoGateway, TodoItem } from '~/types/todos'
 
 const SEED: readonly TodoItem[] = [
-  { id: 'a', title: 'Alpha', completed: false, createdAt: '2026-01-01T09:00:00.000Z' },
-  { id: 'b', title: 'Beta', completed: true, createdAt: '2026-01-01T09:05:00.000Z' },
+  { id: 'a', title: 'Alpha', completed: false, createdAt: '2026-01-01T09:00:00.000Z', version: 1 },
+  { id: 'b', title: 'Beta', completed: true, createdAt: '2026-01-01T09:05:00.000Z', version: 1 },
 ]
 
 /**
@@ -95,6 +101,7 @@ describe('createTodoList', () => {
       title: 'Gamma',
       completed: false,
       createdAt: '2026-02-02T12:00:00.000Z',
+      version: 1,
     })
     expect(list.remaining.value).toBe(2)
   })
@@ -208,6 +215,156 @@ describe('createTodoList', () => {
       await list.refresh()
       expect(list.error.value).toBeNull()
       expect(list.items.value).toEqual(SEED)
+    })
+  })
+
+  describe('conflicts', () => {
+    /** A list whose next write loses to somebody else's, per `script`. */
+    async function conflictedList(
+      script: readonly ('edit' | 'delete' | 'none')[] = ['edit'],
+    ): Promise<TodoListController> {
+      const list = createTodoList(createConflictingTodoGateway(memoryGateway(), { script }))
+      await list.refresh()
+      return list
+    }
+
+    it('records a rejected toggle as a conflict, not as an error', async () => {
+      // The distinction drives the UI: `error` is a red banner about something
+      // that went wrong, and this is a well-formed request that was correctly
+      // refused. Showing both would ask the user to read a failure message about
+      // a request that did exactly what it should.
+      const list = await conflictedList()
+
+      expect(await list.toggle('a')).toBe(false)
+
+      expect(list.error.value).toBeNull()
+      expect(list.conflict.value).not.toBeNull()
+    })
+
+    it('describes both sides of the collision', async () => {
+      const list = await conflictedList()
+
+      await list.toggle('a')
+
+      expect(list.conflict.value?.mine).toMatchObject({ id: 'a', completed: true, version: 1 })
+      expect(list.conflict.value?.theirs).toMatchObject({ version: 2 })
+      expect(list.conflict.value?.intent).toEqual({ kind: 'toggle', completed: true })
+    })
+
+    it('leaves the list untouched while the conflict is unresolved', async () => {
+      const list = await conflictedList()
+
+      await list.toggle('a')
+
+      expect(list.items.value).toEqual(SEED)
+    })
+
+    it('records the intent of a rejected delete', async () => {
+      const list = await conflictedList()
+
+      expect(await list.remove('a')).toBe(false)
+
+      expect(list.conflict.value?.intent).toEqual({ kind: 'remove' })
+      expect(list.items.value.map((item) => item.id)).toEqual(['a', 'b'])
+    })
+
+    it('keepTheirs adopts the stored row and closes the conflict', async () => {
+      const list = await conflictedList()
+      await list.toggle('a')
+
+      list.keepTheirs()
+
+      expect(list.conflict.value).toBeNull()
+      // Not merely "the dialog closed": leaving the stale row on screen would
+      // leave the user looking at a todo whose next write is rejected for the
+      // same reason. The other client set `completed`, so that is what the row
+      // reads now — this client's change is gone, which is what it asked for.
+      expect(list.items.value[0]).toMatchObject({ version: 2, completed: true })
+    })
+
+    it('keepTheirs drops the row when the other client deleted it', async () => {
+      const list = await conflictedList(['delete'])
+      await list.toggle('a')
+
+      list.keepTheirs()
+
+      expect(list.items.value.map((item) => item.id)).toEqual(['b'])
+    })
+
+    it('keepMine re-applies the change on top of their version', async () => {
+      // 'edit' then 'none': the first write loses, the retry goes through.
+      const list = await conflictedList(['edit', 'none'])
+      await list.toggle('a')
+
+      expect(await list.keepMine()).toBe(true)
+
+      expect(list.conflict.value).toBeNull()
+      expect(list.items.value[0]?.completed).toBe(true)
+    })
+
+    it('keepMine guards on their version, not the one it was holding', async () => {
+      // `mine` describes a version that no longer exists. Re-sending it would be
+      // guaranteed to fail — and if the guard were ever dropped "because we
+      // already handled the conflict", it would revert whatever else the other
+      // client changed while intending only to change one field.
+      const gateway = createConflictingTodoGateway(memoryGateway(), { script: ['edit', 'none'] })
+      const setCompleted = vi.spyOn(gateway, 'setCompleted')
+      const list = createTodoList(gateway)
+      await list.refresh()
+      await list.toggle('a')
+
+      await list.keepMine()
+
+      expect(setCompleted.mock.calls).toEqual([
+        ['a', true, 1],
+        ['a', true, 2],
+      ])
+    })
+
+    it('keepMine can conflict again, because a third client may have written', async () => {
+      const list = await conflictedList(['edit', 'edit', 'none'])
+      await list.toggle('a')
+
+      expect(await list.keepMine()).toBe(false)
+
+      // A fresh conflict, against the newer version — not the one it started
+      // with, and not a silently swallowed failure.
+      expect(list.conflict.value?.mine.version).toBe(2)
+      expect(list.conflict.value?.theirs?.version).toBe(3)
+    })
+
+    it('keepMine on a deleted row accepts the deletion instead of recreating it', async () => {
+      const list = await conflictedList(['delete'])
+      await list.toggle('a')
+
+      expect(await list.keepMine()).toBe(false)
+
+      expect(list.conflict.value).toBeNull()
+      expect(list.items.value.map((item) => item.id)).toEqual(['b'])
+    })
+
+    it('does nothing when there is no conflict open', async () => {
+      const list = await conflictedList(['none'])
+
+      expect(await list.keepMine()).toBe(false)
+      expect(() => list.keepTheirs()).not.toThrow()
+      expect(list.items.value).toEqual(SEED)
+    })
+
+    it('reads a conflict from a versionless call as an ordinary error', async () => {
+      // `list` and `create` carry no version, so a conflict arriving from one is
+      // a bug rather than a collision, and must not open a dialog nobody can
+      // resolve.
+      const gateway = memoryGateway()
+      const list = createTodoList(gateway)
+      vi.spyOn(gateway, 'create').mockRejectedValueOnce(
+        new TodoConflictError({ id: 'a', expectedVersion: 1, current: null }),
+      )
+
+      expect(await list.add('Gamma')).toBe(false)
+
+      expect(list.conflict.value).toBeNull()
+      expect(list.error.value).toBeInstanceOf(TodoConflictError)
     })
   })
 

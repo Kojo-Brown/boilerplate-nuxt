@@ -1,7 +1,13 @@
 import { eq } from 'drizzle-orm'
 import { todos, type Todo } from '~/server/db/schema'
+import { versionETag, ETAG_HEADER } from '~/server/utils/optimistic-concurrency'
 import type { ApiResponse } from '~/types/api'
 
+/**
+ * The read half of optimistic concurrency: this is where a client learns which
+ * version it is holding, so it has something to put in `If-Match` when it comes
+ * back to write. See `docs/optimistic-concurrency.md`.
+ */
 export default defineEventHandler(async (event): Promise<ApiResponse<Todo>> => {
   const id = getRouterParam(event, 'id')
 
@@ -15,6 +21,8 @@ export default defineEventHandler(async (event): Promise<ApiResponse<Todo>> => {
   if (!todo) {
     throw createError({ statusCode: 404, message: 'Todo not found' })
   }
+
+  setResponseHeader(event, ETAG_HEADER, versionETag(todo.version))
 
   return {
     data: todo,
