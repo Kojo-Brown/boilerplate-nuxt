@@ -646,7 +646,49 @@ should reach for the clean install first rather than reading it as a real break.
       the Testcontainers item below closes all three. No field-level merge, no
       live feed of others' edits, no `If-None-Match`, no E2E coverage, like PR
       #30–#36 (PR #37)
-- [ ] `useAsyncData` cache keys, `getCachedData`, and payload-size discipline
+- [x] `useAsyncData` cache keys, `getCachedData`, and payload-size discipline —
+      Nuxt's default reuses a result on hydration and then never again:
+      `getDefaultCachedData` falls through to `nuxtApp.static.data`, which is
+      only populated for payload-extracted routes, so in a normal SSR app every
+      later mount refetches. `useCachedAsyncData` adds a TTL, and the three
+      traps that come with it were each read out of Nuxt 4.5.1's source rather
+      than assumed. `granularCachedData` defaults to **true**, so
+      `getCachedData` is consulted on `refresh()` and `refreshNuxtData()` as
+      well — a TTL cache that ignores `cause` turns every refresh button in the
+      app into a no-op for the length of the TTL, silently; only `initial` and
+      `watch` are answered. Hydration still returns `nuxtApp.payload.data[key]`
+      and seeds the store with it, or a cached page fetches everything twice on
+      first load, which is worse than not caching. And `purgeCachedData` skips
+      any key with a custom `getCachedData`
+      (`if (purgeCachedData && !hasCustomGetCachedData)`), so `maxEntries` (50)
+      is the only thing bounding what the app holds, which is also why
+      `invalidate()` is in the return value. `asyncDataKey` holds one
+      invariant — two calls produce the same key exactly when they would
+      produce the same request — so parameters sort, `undefined` and empty
+      arrays drop, every segment is percent-encoded (`{ 'a&b': '1' }` cannot
+      collide with `{ a: '', b: '1' }`), and `NaN`/null/objects throw rather
+      than becoming a key every malformed request would share. The store hangs
+      off the NuxtApp, so a server-side hit is impossible by construction —
+      `docs/composable-design-rules.md`'s argument against a module-scope
+      `Map`. Payload size is the other end of the same problem: everything
+      resolved on the server is serialized into the document as well as
+      rendered, so each response is downloaded twice on first paint with no
+      network-panel entry for the second copy. Every resolution is measured
+      against a budget and names its largest fields when it goes over. The
+      hydration path is measured too, and that came out of driving the page in
+      a browser rather than out of the unit tests: a first pass measured only
+      client-side fetches, so the demo's payload panel read `—` on a normal
+      page load — the one case where the bytes had actually been paid. The
+      built server was driven in Chromium counting `/api/posts` requests, so a
+      hit is the absence of a request rather than a label the page printed:
+      first load `hydration`/0 requests, Next `miss`/1, Previous `hit`/**0**,
+      `refresh()` `bypass`/1, and the same 20 posts measuring 3.34 kB whole
+      against 683 B through `transform`. Not done: no E2E spec, since
+      Playwright is still not wired into CI here and one would not be run by
+      anything; the TTL and cap are per-app rather than per-key, so later call
+      sites can only widen them; the budget is a dev signal, not a gate; and
+      measurement is `JSON.stringify` plus a UTF-8 byte count, a close estimate
+      of what devalue emits rather than the exact figure (PR #38)
 - [ ] Islands / server components for zero-JS content sections
 - [ ] Core Web Vitals instrumentation reported to an analytics sink
 - [ ] Bundle budget gate in CI + per-route payload report
