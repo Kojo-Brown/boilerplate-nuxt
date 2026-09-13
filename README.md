@@ -308,6 +308,44 @@ protected; and a page reading a protected route during SSR needs
 `useRequestFetch()`, since plain `$fetch` sends no cookies and `useAsyncData`
 turns the resulting 401 into a silently dataless 200.
 
+## Cache keys, `getCachedData`, and payload size
+
+Nuxt reuses `useAsyncData` results on hydration and then never again, so every
+later mount refetches — a tab switched away from and back, a list returning to
+page 1. `useCachedAsyncData` adds a TTL to that, and the two things it takes to
+do safely.
+
+[**docs/async-data-caching.md**](./docs/async-data-caching.md) is the guide;
+`/async-data-cache` is the demo.
+
+```ts
+const { data, cacheStatus, payload } = useCachedAsyncData(
+  () => asyncDataKey('posts', { page: page.value, limit: limit.value }),
+  () => requestFetch('/api/posts', { params: { page: page.value, limit: limit.value } }),
+  { ttlMs: 60_000 },
+)
+```
+
+`asyncDataKey` holds one invariant — two calls produce the same key exactly when
+they would produce the same request — which is what a hand-built
+`` `posts-${page}-${limit}` `` does not, and why two components can end up
+sharing one data ref.
+
+Three things the wrapper exists to get right, each of which fails silently
+otherwise. Nuxt's `granularCachedData` defaults to **true**, so `getCachedData`
+is consulted on `refresh()` too: a TTL cache that ignores the `cause` turns
+every refresh button in the app into a no-op. Hydration must still come from
+`nuxtApp.payload.data`, or a cached page fetches everything twice on first load.
+And supplying `getCachedData` at all switches off Nuxt's `purgeCachedData`
+sweep for that key, so `maxEntries` is the only thing bounding what the app
+holds.
+
+The third piece is the payload itself: everything resolved on the server is
+serialized into the document as well as rendered, so each response is downloaded
+twice on first paint with no network-panel entry for the second copy. Every
+resolution is measured against a budget and names its largest fields when it
+goes over — `transform` takes the demo's own list from 3.34 kB to 683 B.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).
