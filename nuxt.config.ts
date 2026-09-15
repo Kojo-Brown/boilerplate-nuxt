@@ -18,6 +18,24 @@ export default defineNuxtConfig({
    */
   routeRules,
 
+  experimental: {
+    // Server islands (`components/islands/`, rendered with `<NuxtIsland>`).
+    //
+    // `true`, not `{ selectiveClient: true }`: selective client components let
+    // an island mark a child as `nuxt-client` and ship it after all, which is a
+    // useful escape hatch and the wrong default here — it makes "this component
+    // is in no client chunk" a per-child question rather than a property of the
+    // directory. An island that needs interactivity is a component that should
+    // not have been an island.
+    //
+    // "experimental" is the flag, not the maturity: the island endpoint and the
+    // `<NuxtIsland>` API are what Nuxt's own docs tell you to build on, and
+    // `getIslandHash`/`serializeIslandProps` are exported from `nuxt/app` as
+    // public API. What the flag buys is that none of it is compiled in for
+    // projects that do not use it. See docs/server-islands.md.
+    componentIslands: true,
+  },
+
   nitro: {
     experimental: {
       // Required for `defineWebSocketHandler` (server/api/ws/echo.ts). Without

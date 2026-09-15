@@ -82,6 +82,14 @@ export const serverAccessRules: Readonly<Record<string, RouteAccess>> = {
   // cache-stampede button. An exact key beats the wildcard above it.
   '/api/cached/invalidate': 'authenticated',
 
+  // The content behind the server islands. An island response is keyed by the
+  // island's name and its props and by nothing else — no cookie is part of that
+  // key — so a route an island reads must answer the same way for every caller
+  // or the first visitor's copy is what the cache serves to the rest. The
+  // sections are public documentation with no per-user half. See
+  // docs/server-islands.md.
+  '/api/content/**': 'public',
+
   // Read during the SSR of `/rendering/isr`, whose HTML is itself cached for 60
   // seconds by a route rule. The render that fills that cache happens on behalf
   // of whoever missed it first, so it has no user to forward — same reasoning as

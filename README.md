@@ -346,6 +346,35 @@ twice on first paint with no network-panel entry for the second copy. Every
 resolution is measured against a budget and names its largest fields when it
 goes over — `transform` takes the demo's own list from 3.34 kB to 683 B.
 
+## Server Islands
+
+A component in `components/islands/` renders on the server and is delivered as
+HTML. Its code is compiled into the server bundle and into **no client chunk**,
+so the browser gets the markup and never the component that produced it — the
+right trade for content, which has no state to hydrate and no handlers to bind.
+
+[**docs/server-islands.md**](./docs/server-islands.md) is the guide; `/islands`
+is the demo, and it renders its own explanation through the mechanism it is
+explaining.
+
+```vue
+<NuxtIsland name="ContentSection" :props="{ slug }" />
+```
+
+The markup renderer behind those sections (`server/utils/content-markup.ts`) is
+the code that stays put: ~10 kB of island components and styles compile into
+`.output/server/chunks/` and into nothing under `.output/public/_nuxt/`.
+
+Three things the guide is there to get right. **Island markup is inert** — a
+`@click` inside one never fires and `onMounted` never runs, with no warning
+anywhere, so `tests/unit/islands.test.ts` scans the directory for both. **Props
+are a cache key**: they are JSON-serialised into the island's URL, which makes
+them public, logged, and one cache entry per distinct value — `inspectIslandProps()`
+reports what serialisation will do to them before they are sent. And **`lazy`
+defers a navigation, not a first paint**: on a full page load a lazy island is
+server-rendered and inlined like any other, which is the opposite of what the
+name suggests.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).
