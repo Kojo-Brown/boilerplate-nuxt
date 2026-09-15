@@ -689,7 +689,41 @@ should reach for the clean install first rather than reading it as a real break.
       sites can only widen them; the budget is a dev signal, not a gate; and
       measurement is `JSON.stringify` plus a UTF-8 byte count, a close estimate
       of what devalue emits rather than the exact figure (PR #38)
-- [ ] Islands / server components for zero-JS content sections
+- [x] Islands / server components for zero-JS content sections —
+      `experimental.componentIslands` is on and `components/islands/` holds
+      `ContentSection` and `ContentIndex`, whose code compiles into the server
+      bundle (~10 kB across three `.output/server/chunks/build/*.mjs`) and into
+      nothing under `.output/public/_nuxt/`. The work that stays behind is the
+      point: `server/utils/content-markup.ts` renders an authored subset —
+      headings, lists, fenced code, inline code, bold, links — and lives under
+      `server/` rather than in `utils/` precisely because app-level `utils/` is
+      auto-imported into the client bundle. It escapes every character of its
+      source before applying a single markup rule, which is the safe ordering
+      and not the obvious one, checks link targets against a scheme allowlist,
+      and reuses `escapeHtml` from `stream.ts` rather than keeping a second copy
+      of a security-relevant function. Island props are JSON-serialised into the
+      request URL, so they are public, logged, one cache entry per distinct
+      value, and silently reshaped by JSON (`undefined` dropped, `NaN` → `null`,
+      `Date` → string); `inspectIslandProps` reports all four against a 1 kB
+      budget and returns a report rather than throwing, the same split
+      `payloadBudget` makes. `/islands` and `/api/content/**` are public because
+      an island response is keyed by name and props and by nothing else — no
+      cookie is part of that key. Two claims the unit suite cannot reach came
+      out of driving the built server in Chromium, and both corrected the code
+      rather than confirming it: `lazy` does **not** defer a first paint (on a
+      full load the island is fetched during SSR and inlined either way — 0
+      island requests from the browser; it defers a client-side navigation,
+      which is 5), and rendering one section twice duplicated its element id, so
+      `ContentSection` took an `anchored` flag that is itself a second cache
+      key. Changing the selector costs exactly one island request and zero `.js`
+      requests. Not done: no E2E spec, since Playwright is still not wired into
+      CI here and one would not be run by anything, so the browser numbers are
+      recorded in `docs/server-islands.md` rather than asserted; no cache rule
+      in front of `/__nuxt_island/**`, because Nitro's matching does not glob
+      mid-segment and the whole namespace would have to be cached together;
+      `selectiveClient` is deliberately off; and the inertness check is a source
+      scan, so it catches a handler in an island file and not one reached
+      through a helper (PR #39)
 - [ ] Core Web Vitals instrumentation reported to an analytics sink
 - [ ] Bundle budget gate in CI + per-route payload report
 - [ ] Image optimisation with `@nuxt/image`, AVIF/WebP, and CLS-safe ratios
