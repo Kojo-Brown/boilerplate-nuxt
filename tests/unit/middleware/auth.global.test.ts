@@ -74,6 +74,14 @@ describe('auth.global middleware', () => {
       handler({ path: '/route-rules/static' }, { path: '' })
       expect(mockNavigateTo).not.toHaveBeenCalled()
     })
+
+    it('does not redirect when accessing the islands demo', () => {
+      // An island response is keyed by its props and nothing else, so the page
+      // that renders one has no per-user half to protect. See
+      // docs/server-islands.md.
+      handler({ path: '/islands' }, { path: '' })
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+    })
   })
 
   describe('authenticated user', () => {
