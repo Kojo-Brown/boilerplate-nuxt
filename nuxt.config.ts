@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite'
 import { routeRules } from './route-rules.config'
+import { VITALS_ENDPOINT } from './types/vitals'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
@@ -168,6 +169,20 @@ export default defineNuxtConfig({
         publishTimeoutMs: 5_000,
       },
     },
+    vitals: {
+      // Where `/api/vitals` forwards each batch of Core Web Vitals — an
+      // analytics collector, a log shipper, whatever owns the durable copy.
+      // Unset is a supported mode, not a broken one: the in-process aggregate
+      // behind `/api/vitals/summary` still collects, and a built server says so
+      // once at boot. A URL that is set but unparseable is fatal at startup.
+      // NUXT_VITALS_SINK_URL.
+      sinkUrl: '',
+      // Per-delivery timeout in milliseconds, clamped to 100…30000. A batch is
+      // never retried — the next page load brings a fresh one, and a relay in
+      // front of a metric would cost more than the metric is worth. See
+      // server/utils/vitals-sink.ts. NUXT_VITALS_TIMEOUT_MS.
+      timeoutMs: 3000,
+    },
     session: {
       // Placeholder only — nuxt-auth-utils requires the key to be present in the
       // schema. The real value comes from NUXT_SESSION_PASSWORD at runtime and
@@ -189,6 +204,29 @@ export default defineNuxtConfig({
       // own host is always allowed, so same-origin needs no configuration. Set
       // NUXT_WS_ALLOWED_ORIGINS when a separate front end connects to this API.
       allowedOrigins: '',
+    },
+
+    // Everything above is server-only. This block is serialised into the HTML
+    // payload and readable by every visitor, which is why the project's rule is
+    // that a secret never goes in it (CLAUDE.md, and the note in
+    // `server/utils/storage.ts` on what gets baked into a build).
+    //
+    // These three are not secrets by nature — they describe behaviour the
+    // browser performs in the open. Overridden with NUXT_PUBLIC_WEB_VITALS_*.
+    public: {
+      webVitals: {
+        // Off switch. `NUXT_PUBLIC_WEB_VITALS_ENABLED=false` stops the plugin
+        // before it registers an observer or sends anything.
+        enabled: true,
+        // Same-origin by design: a cross-origin beacon with a JSON content type
+        // needs a CORS preflight, which an unloading page cannot complete.
+        endpoint: VITALS_ENDPOINT,
+        // Fraction of page loads that report, clamped to 0…1. One is right for
+        // dev and for a site that is not yet busy; lower it when the beacon
+        // volume starts mattering — p75 over a sample is still p75.
+        // NUXT_PUBLIC_WEB_VITALS_SAMPLE_RATE.
+        sampleRate: 1,
+      },
     },
   },
 })

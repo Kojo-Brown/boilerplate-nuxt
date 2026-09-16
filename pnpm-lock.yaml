@@ -59,6 +59,9 @@ importers:
       vue-router:
         specifier: ^5.2.0
         version: 5.2.0(@vue/compiler-sfc@3.5.40)(esbuild@0.28.1)(pinia@4.0.2(@vue/devtools-api@8.2.1)(typescript@6.0.3)(vue@3.5.40(typescript@6.0.3)))(rolldown@1.2.1)(rollup@4.62.3)(vite@8.1.5(@types/node@22.20.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))(vue@3.5.40(typescript@6.0.3))
+      web-vitals:
+        specifier: ^6.2.2
+        version: 6.2.2
       zod:
         specifier: ^3.25.0
         version: 3.25.76
@@ -5724,6 +5727,9 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  web-vitals@6.2.2:
+    resolution: {integrity: sha512-oto5x6dLEgrRqfcWed+pZEUb2q6ikbFmqF54CRDhI/QGbn+qxC49b4C4OkbH+kb9C3a8shpFD3SgR9kRcs80ZQ==}
 
   webidl-conversions@3.0.1:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
@@ -11797,6 +11803,8 @@ snapshots:
       '@vue/shared': 3.5.40
     optionalDependencies:
       typescript: 6.0.3
+
+  web-vitals@6.2.2: {}
 
   webidl-conversions@3.0.1: {}
 
