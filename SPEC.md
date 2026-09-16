@@ -724,7 +724,39 @@ should reach for the clean install first rather than reading it as a real break.
       `selectiveClient` is deliberately off; and the inertness check is a source
       scan, so it catches a handler in an island file and not one reached
       through a helper (PR #39)
-- [ ] Core Web Vitals instrumentation reported to an analytics sink
+- [x] Core Web Vitals instrumentation reported to an analytics sink — the field
+      half of performance, which nothing here had: `web-vitals` reports LCP, CLS,
+      INP, FCP and TTFB, `utils/webVitals.ts` buffers them keyed on the metric
+      instance id (CLS accumulates and INP only worsens, so every report of an
+      instance supersedes the last), and `navigator.sendBeacon` sends them on
+      `visibilitychange` → hidden and on `pagehide`. Not `unload`: mobile Safari
+      never fires it and listening for it disqualifies the page from the bfcache,
+      so the instrumentation would slow down the navigation it measures. At that
+      moment the document may never run JS again, which is why nothing in the
+      path depends on a promise, a retry or a response — a refused beacon keeps
+      its samples for the next flush instead. `reportSoftNavs` is on, because a
+      SPA otherwise attributes everything after the first client-side navigation
+      to the landing route; each sample carries the metric's own `navigationURL`,
+      pathname only. `/api/vitals` is public and had to be — the loads worth
+      measuring are logged-out first visits and a beacon cannot carry a header —
+      so the schema is the gate: closed enums, bounded strings and arrays, and
+      `.strict()` on every object, without which the route would forward
+      arbitrary JSON to a third party. `/api/vitals/summary` stays behind the
+      `/api/**` default-deny. Unconfigured is a supported mode: with no
+      `NUXT_VITALS_SINK_URL` batches land in a bounded in-process window that
+      reports nearest-rank p75 per metric and route (rated as a number, not as a
+      vote of per-sample ratings, with the distribution beside it), rather than
+      being collected in every browser and dropped; a URL that is set but
+      unparseable stops the server booting. Verified against the built server,
+      not just the unit suite: a batch forwards verbatim to a local collector, an
+      extra key is 400, the summary is 401 anonymous and returns the right p75
+      with a session, a dead collector still answers 202 with the aggregate alone
+      and logs one warning for three failures, and a bad sink URL exits 1 at
+      boot. Not done: no demo page (a page rendering its own vitals is a debug
+      overlay, not field data), no `web-vitals/attribution` — it puts DOM
+      selectors in the beacon and doubles it — no Lighthouse gate in CI, which
+      belongs with the bundle-budget item below, and no E2E spec, since Playwright
+      is still not wired into CI here (PR #40)
 - [ ] Bundle budget gate in CI + per-route payload report
 - [ ] Image optimisation with `@nuxt/image`, AVIF/WebP, and CLS-safe ratios
 
