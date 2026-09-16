@@ -375,6 +375,33 @@ defers a navigation, not a first paint**: on a full page load a lazy island is
 server-rendered and inlined like any other, which is the opposite of what the
 name suggests.
 
+## Core Web Vitals
+
+Lighthouse measures one load on one machine. The number a site is assessed on is
+field data: real visitors, at p75. The browser collects LCP, CLS, INP, FCP and
+TTFB, batches them, and beacons them to `/api/vitals`, which forwards each batch
+to whatever `NUXT_VITALS_SINK_URL` points at.
+
+[**docs/web-vitals.md**](./docs/web-vitals.md) is the guide.
+
+```sh
+curl -s localhost:3000/api/vitals -H 'content-type: application/json' -d '…'
+# {"accepted":1,"sinks":["aggregate","log"]}
+```
+
+Three things the guide is there to get right. **No vital is final until the page
+is going away** — CLS accumulates for the life of the page and INP can only get
+worse — so the flush happens on `visibilitychange` → hidden and on `pagehide`,
+never on `unload`, which mobile Safari does not fire and which disqualifies the
+page from the bfcache just by being listened for. That leaves
+`navigator.sendBeacon` as the only send that survives the document, and a beacon
+carries no headers, which is why **`/api/vitals` is public** and why its schema
+is closed enums and bounded everything. And **unconfigured is a supported mode**:
+with no sink URL the batches land in a bounded in-process window that
+`GET /api/vitals/summary` reports as p75 per route, so nothing is collected and
+silently dropped — a URL that is set but unparseable stops the server from
+booting instead.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).

@@ -90,6 +90,17 @@ export const serverAccessRules: Readonly<Record<string, RouteAccess>> = {
   // docs/server-islands.md.
   '/api/content/**': 'public',
 
+  // Core Web Vitals ingest. Public because it has to be: the loads worth
+  // measuring are first visits by logged-out users, and `navigator.sendBeacon`
+  // — the only send that survives a page being unloaded — cannot attach a
+  // header, so there is no credential to present even when a session exists.
+  // An exact key, so it does not cover `/api/vitals/summary` below it: that one
+  // reads the aggregate back and stays behind the `/api/**` default. What makes
+  // an unauthenticated write safe is the schema in
+  // `server/utils/vitals-schemas.ts` — closed enums and bounded everything. See
+  // docs/web-vitals.md.
+  '/api/vitals': 'public',
+
   // Read during the SSR of `/rendering/isr`, whose HTML is itself cached for 60
   // seconds by a route rule. The render that fills that cache happens on behalf
   // of whoever missed it first, so it has no user to forward — same reasoning as
