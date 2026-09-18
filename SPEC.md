@@ -757,8 +757,43 @@ should reach for the clean install first rather than reading it as a real break.
       selectors in the beacon and doubles it — no Lighthouse gate in CI, which
       belongs with the bundle-budget item below, and no E2E spec, since Playwright
       is still not wired into CI here (PR #40)
-- [ ] Bundle budget gate in CI + per-route payload report
+- [x] Bundle budget gate in CI + per-route payload report — `nuxt build` prints
+      one client-bundle size and no visitor downloads it; what a page load
+      fetches is the entry chunk, the page's chunk and the static imports of
+      both, and nothing reported that. `modules/bundle-budget.ts` persists the
+      client manifest from the `build:manifest` hook (Nuxt leaves no readable
+      copy after a build: the client dist is consumed by the Nitro build and the
+      only survivor is the precomputed structure inlined into
+      `.output/server/chunks/virtual/`), and `pnpm bundle:budget` gzips the real
+      files and measures each route against two ceilings in
+      `bundle-budget.config.ts` — its total and what it adds on top of the
+      shared baseline, because a page importing a chart library and a component
+      added to `app.vue` are different failures and the second otherwise reports
+      as twenty-three at once. A page with no budget fails, and so does a budget
+      with no page. The model is not trusted: every run diffs the computed asset
+      set for `/route-rules/static`, the one prerendered route, against the
+      `<link>` tags in the document the build wrote, so a Nuxt upgrade that
+      changes how the renderer walks the manifest fails the gate instead of
+      quietly moving every number. Budgets are measured plus the larger of 5%
+      and 2 kB (512 B for a route's own share) — the floor is because the
+      route-only figures are 1–8 kB, where 5% is inside the range two Node
+      majors' zlib builds can differ by. Measured identically on the Node 22 and
+      Node 24 legs: shared baseline 137.7 kB gzipped (385.2 kB raw) across 21
+      files, routes 138.8 kB (`/route-rules/static`) to 145.3 kB
+      (`/dependency-inversion`). Checked in the failing direction too — a 4 kB
+      ceiling on `/islands` exits 1 naming the route and the overage (PR #41)
+
 - [ ] Image optimisation with `@nuxt/image`, AVIF/WebP, and CLS-safe ratios
+
+Found while landing the bundle budget gate (PR #41), and not fixed there: the
+`build-output-node-*` CI artifact has never contained anything.
+`actions/upload-artifact` treats a dot-directory as hidden, so `path: .output/`
+matches nothing and the step logs `##[warning] No files were found with the
+provided path: .output/` — a standing warning in a repo whose Phase 0 made
+warnings failures, and an artifact that has been empty since the Build job was
+added. `include-hidden-files: true` on that step is the fix. The bundle-budget
+report artifact is unaffected: an explicit file path inside a hidden directory
+still uploads.
 
 ## Phase 9 — Security & Accessibility
 
