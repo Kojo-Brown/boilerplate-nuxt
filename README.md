@@ -402,6 +402,33 @@ with no sink URL the batches land in a bounded in-process window that
 silently dropped — a URL that is set but unparseable stops the server from
 booting instead.
 
+## Bundle budgets
+
+`nuxt build` prints one size for the client bundle, and no visitor ever
+downloads it. What a page load actually fetches is the entry chunk, the chunk
+for that page, and the static imports of both — so that is what `pnpm
+bundle:budget` measures, per route, gzipped, against a ceiling per route in
+`bundle-budget.config.ts`. It runs in CI after every build.
+
+[**docs/bundle-budget.md**](./docs/bundle-budget.md) is the guide.
+
+```sh
+pnpm build && pnpm bundle:budget
+# /islands   144.3 kB  152.0 kB   6.58 kB  7.25 kB   400.1 kB
+# Shared baseline: 137.7 kB gzipped across 21 files, budget 145.0 kB
+```
+
+Three things the guide is there to get right. **Two budgets per route, not
+one** — a total and the route's own share — because a page importing a chart
+library and a component added to `app.vue` are different failures, and the
+second one otherwise shows up as every route breaking at once. **Dynamic
+imports do not count**: Nuxt prefetches every other page's chunk at idle, and
+counting those would give every route the same number, the whole application.
+And **the model is checked against a real document** on every run: the computed
+asset set for the one prerendered route is diffed against the `<link>` tags in
+the HTML the build wrote, because a manifest walk that a Nuxt upgrade has made
+obsolete would otherwise keep reporting confident numbers.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).
