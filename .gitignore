@@ -1,6 +1,7 @@
 node_modules
 .nuxt
 .output
+.bundle-budget
 .data
 dist
 coverage

@@ -52,7 +52,18 @@ export default defineNuxtConfig({
     },
   },
 
-  modules: ['@nuxt/eslint', 'nuxt-auth-utils', '@pinia/nuxt', '@nuxtjs/color-mode', '@nuxtjs/i18n'],
+  // `./modules/bundle-budget` is listed explicitly rather than relying on the
+  // `modules/` directory scan, so that reading this array tells you everything
+  // that hooks into the build. It only writes the client manifest out for
+  // `scripts/assert-bundle-budget.ts`; see the module for why that is needed.
+  modules: [
+    '@nuxt/eslint',
+    'nuxt-auth-utils',
+    '@pinia/nuxt',
+    '@nuxtjs/color-mode',
+    '@nuxtjs/i18n',
+    './modules/bundle-budget',
+  ],
 
   // Tailwind 4 ships its own Vite plugin. @nuxtjs/tailwindcss is a Tailwind 3
   // module — it registers `tailwindcss` as a PostCSS plugin, which Tailwind 4

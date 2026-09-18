@@ -162,6 +162,24 @@ jobs:
         env:
           NODE_OPTIONS: --throw-deprecation
 
+      # Runs in this job rather than its own because it measures `.output/`,
+      # which only exists here: a separate job would have to download the build
+      # artifact and would then be reporting on an upload rather than on what
+      # the build wrote. See docs/bundle-budget.md.
+      - name: Bundle budget
+        run: pnpm bundle:budget
+        env:
+          NODE_OPTIONS: --throw-deprecation
+
+      - name: Upload bundle budget report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: bundle-budget-node-${{ matrix.node-version }}
+          path: .bundle-budget/report.json
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Upload build output
         uses: actions/upload-artifact@v6
         with:
