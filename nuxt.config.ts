@@ -1,4 +1,5 @@
 import tailwindcss from '@tailwindcss/vite'
+import { imageConfig } from './image.config'
 import { routeRules } from './route-rules.config'
 import { VITALS_ENDPOINT } from './types/vitals'
 
@@ -62,6 +63,7 @@ export default defineNuxtConfig({
     '@pinia/nuxt',
     '@nuxtjs/color-mode',
     '@nuxtjs/i18n',
+    '@nuxt/image',
     './modules/bundle-budget',
   ],
 
@@ -73,6 +75,11 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()],
   },
+
+  // Formats, candidate widths and the transformer, kept in their own module so
+  // they can be unit-tested; `components/AppImage.vue` is what makes a page use
+  // them safely. See image.config.ts and docs/images.md.
+  image: imageConfig,
 
   i18n: {
     locales: [

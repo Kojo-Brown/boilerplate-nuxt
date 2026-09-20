@@ -102,10 +102,11 @@ measured: `pnpm bundle:budget path/to/checkout`.
 ```
 Route                    Total gzip    Budget  Route-only gzip   Budget  Raw total
 ───────────────────────  ──────────  ────────  ───────────────  ───────  ─────────
-/dependency-inversion      145.3 kB  153.0 kB          7.60 kB  8.25 kB   405.5 kB
-/islands                   144.3 kB  152.0 kB          6.58 kB  7.25 kB   400.1 kB
+/dependency-inversion      145.5 kB  153.0 kB          7.60 kB  8.25 kB   406.1 kB
+/images                    144.8 kB  153.0 kB          6.93 kB  7.50 kB   403.9 kB
+/islands                   144.5 kB  152.0 kB          6.58 kB  7.25 kB   400.7 kB
 …
-Shared baseline: 137.7 kB gzipped (385.2 kB raw) across 21 files, budget 145.0 kB
+Shared baseline: 137.9 kB gzipped (385.8 kB raw) across 21 files, budget 145.0 kB
 ```
 
 In CI it runs in the `build` job on every Node major in the matrix, writes
