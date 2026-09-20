@@ -59,6 +59,7 @@ export const bundleBudgets: BudgetConfig = {
     '/data-patterns': { totalGzipBytes: kB(148), routeGzipBytes: kB(3.5) },
     '/dependency-inversion': { totalGzipBytes: kB(153), routeGzipBytes: kB(8.25) },
     '/effect-scope': { totalGzipBytes: kB(148), routeGzipBytes: kB(3.5) },
+    '/images': { totalGzipBytes: kB(153), routeGzipBytes: kB(7.5) },
     '/islands': { totalGzipBytes: kB(152), routeGzipBytes: kB(7.25) },
     '/login': { totalGzipBytes: kB(147), routeGzipBytes: kB(2.5) },
     '/reactivity-performance': { totalGzipBytes: kB(149), routeGzipBytes: kB(4.25) },

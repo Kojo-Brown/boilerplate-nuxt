@@ -15,6 +15,7 @@ Full-stack Nuxt starter with server-side rendering, auth, and a database-first a
 | Database  | Drizzle ORM + PostgreSQL |
 | Auth      | nuxt-auth-utils          |
 | i18n      | @nuxtjs/i18n             |
+| Images    | @nuxt/image + IPX        |
 | Testing   | Vitest + Playwright      |
 
 ## Requirements
@@ -402,6 +403,42 @@ with no sink URL the batches land in a bounded in-process window that
 silently dropped — a URL that is set but unparseable stops the server from
 booting instead.
 
+## Images
+
+Two problems travel under one name. **Bytes**: a 1920×1080 JPEG is 57 kB and the
+same frame is 19 kB as WebP, and the phone downloading it can show 390 CSS
+pixels of it anyway. **Layout**: an image with no declared size occupies nothing
+until it arrives, so the page reflows around it — which making the image smaller
+does not fix. `@nuxt/image` solves the first and merely permits the second to be
+solved, so `<AppImage>` sits in front of it and refuses to render without an
+intrinsic box.
+
+[**docs/images.md**](./docs/images.md) is the guide; `/images` is the live demo.
+
+```vue
+<AppImage
+  src="/images/hero-workspace.jpg"
+  alt="A desk with a laptop and a mug"
+  :width="1920"
+  ratio="16/9"
+  sizes="xs:100vw sm:100vw md:100vw lg:960px"
+  priority
+/>
+```
+
+Three things the guide is there to get right. **`sizes` is not the HTML
+attribute** — the module wants `xs:100vw md:50vw` keyed on configured screens,
+and the familiar `sizes="100vw"` is not rejected but filed under a screen named
+`"1px"`, which renders a one-pixel-wide image with no warning anywhere; that is
+what `utils/imageSizes.ts` throws on. **Source order is a decision, not a
+measurement**: the browser takes the first `<source>` it can decode and never
+compares sizes, and on the flat synthetic samples in `public/images/` WebP
+actually beats AVIF (19.1 kB against 26.2 kB at 1920 wide) — AVIF leads because
+it wins on photographs, which is a bet about your content. And **three things
+have to agree to reserve the space** — the `width`/`height` attributes, the CSS
+`aspect-ratio`, and the ratio IPX crops each `srcset` variant to — because a 3:4
+source in a 1:1 box with correct attributes still delivers the wrong shape.
+
 ## Bundle budgets
 
 `nuxt build` prints one size for the client bundle, and no visitor ever
@@ -414,8 +451,8 @@ bundle:budget` measures, per route, gzipped, against a ceiling per route in
 
 ```sh
 pnpm build && pnpm bundle:budget
-# /islands   144.3 kB  152.0 kB   6.58 kB  7.25 kB   400.1 kB
-# Shared baseline: 137.7 kB gzipped across 21 files, budget 145.0 kB
+# /islands   144.5 kB  152.0 kB   6.58 kB  7.25 kB   400.7 kB
+# Shared baseline: 137.9 kB gzipped across 21 files, budget 145.0 kB
 ```
 
 Three things the guide is there to get right. **Two budgets per route, not
