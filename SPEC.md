@@ -783,7 +783,51 @@ should reach for the clean install first rather than reading it as a real break.
       (`/dependency-inversion`). Checked in the failing direction too — a 4 kB
       ceiling on `/islands` exits 1 naming the route and the overage (PR #41)
 
-- [ ] Image optimisation with `@nuxt/image`, AVIF/WebP, and CLS-safe ratios
+- [x] Image optimisation with `@nuxt/image`, AVIF/WebP, and CLS-safe ratios — two
+      problems travel under one name, and the module only solves one. It gives
+      format negotiation and on-demand resizing; it does not give a box that
+      stays still, because every sizing prop on `<NuxtImg>`/`<NuxtPicture>` is
+      optional and an unsized image renders happily. So `<AppImage>` sits in
+      front of it and will not render without an intrinsic box: `width` and
+      `ratio` are both required and the `height` attribute is derived, rather
+      than two numbers that can disagree with each other and with the source.
+      Both reach IPX as modifiers, so every srcset candidate is cropped to the
+      declared ratio — without that a 3:4 source in a 1:1 box reserves a square
+      and delivers a portrait, attributes correct and layout still wrong. The
+      `sizes` expression is validated against the configured screens, because
+      the module's own parser will not: `sizes="100vw"`, the HTML attribute
+      everyone already knows, is filed under a screen key of `"1px"` and renders
+      a one-pixel-wide image with no warning anywhere. All of these throw rather
+      than degrade — they are deterministic, so none can reach production
+      without failing locally first. `image.config.ts` is its own module for the
+      same reason `route-rules.config.ts` is, and `AppImage.vue` holds no logic
+      of its own because the unit suite runs in `node` with no SFC compiler, so
+      a `.vue` file is not importable there; the arithmetic lives in
+      `utils/imageRatio.ts` and `utils/imageSizes.ts`. Verified against the
+      built server, not just the unit suite: IPX returns `image/avif`,
+      `image/webp` and `image/jpeg` on the real srcset URLs, the SSR document
+      carries the source pair, the intrinsic attributes, the `aspect-ratio`, the
+      loading hints and the preload link, and a Playwright spec measures the
+      page's actual CLS through a `PerformanceObserver` at under 0.01. Two
+      things worth recording rather than glossing: the AVIF-first order is a bet
+      on photographic content and does not pay on the flat synthetic samples
+      committed here (1920 wide at q72: AVIF 26.2 kB, WebP 19.1 kB, JPEG
+      59.7 kB), and the IPX provider traces `sharp` into the Nitro output, which
+      grows `.output` from ~6 MB to ~27 MB with architecture-specific binaries.
+      Budget: `/images` at 144.8 kB total / 6.93 kB route-only, and the shared
+      baseline moved 137.7 → 137.9 kB for the module's runtime, still under its
+      unchanged 145 kB ceiling (PR #42)
+
+Found while landing the image item (PR #42), and not fixed there: `pnpm
+typecheck` depends on which `vite` pnpm hoists into
+`node_modules/.pnpm/node_modules/`. `@nuxt/schema` `import type`s from a bare
+`'vite'` without depending on it, so the type resolves through that hoisted
+fallback, and this project has both vite 7 (Vitest) and vite 8 (Nuxt) in the
+tree. With the 7 hoisted, `nuxt.config.ts`'s `vite.plugins: [tailwindcss()]`
+fails to typecheck. A cold install — what CI does every run, since `setup-node`
+caches the pnpm store and not `node_modules` — deterministically picks 8; an
+incremental `pnpm add` into an existing store can flip it to 7. Declaring `vite`
+as an explicit devDependency at the major Nuxt uses is the fix.
 
 Found while landing the bundle budget gate (PR #41), and not fixed there: the
 `build-output-node-*` CI artifact has never contained anything.
