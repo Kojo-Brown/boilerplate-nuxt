@@ -14,6 +14,13 @@ Rename `00.request-context.ts` to `request-context.ts` and it sorts _after_
 `10.auth.ts`, which would leave the 401 thrown in the auth middleware with no
 request id to report. The numbers are load-bearing.
 
+Security response headers are the one piece of request-scoped work that is
+deliberately **not** here. Nitro serves `public/` and every prerendered page from
+a handler matched before this chain, so a header set in `server/middleware/`
+never reaches them; they are applied from Nitro's `request` hook instead, in
+`server/plugins/security-headers.ts`. See
+[docs/security-headers.md](./security-headers.md).
+
 Middleware that returns `undefined` does not handle the request — it falls
 through to the next one and eventually to the route. Neither file here returns a
 value except by throwing, so they are context setup and a gate, nothing else.

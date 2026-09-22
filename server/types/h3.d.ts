@@ -23,6 +23,10 @@ import type { RequestAuth } from '~/server/utils/request-auth'
  *
  *  - `requestId` / `requestReceivedAt` — `00.request-context.ts`, which runs for
  *    every request, so both are always present by the time a handler executes.
+ *  - `cspNonce` — the `request` hook in `server/plugins/security-headers.ts`,
+ *    for every response except those served from shared (prerendered or
+ *    cached) HTML. It is a plugin rather than middleware because static and
+ *    prerendered output never reaches the middleware chain; see that file.
  *  - `auth` — `10.auth.ts`, and only for paths `server/utils/access-policy.ts`
  *    manages. It is optional because that is the truth: a page or asset request
  *    never has one. `requireAuth(event)` is the accessor that turns the absent
@@ -41,6 +45,18 @@ declare module 'h3' {
 
     /** `Date.now()` at the moment the request entered the middleware chain. */
     requestReceivedAt: number
+
+    /**
+     * The Content-Security-Policy nonce minted for this response by
+     * `server/utils/security-response.ts`, and written onto the document's
+     * inline tags by `server/plugins/security-headers.ts`.
+     *
+     * Optional because its absence is meaningful rather than accidental: a path
+     * whose HTML is prerendered or cached is served the same body to everyone,
+     * so it gets a policy with no nonce in it at all. See
+     * `server/utils/security-headers.ts` and `docs/security-headers.md`.
+     */
+    cspNonce?: string
 
     /**
      * Who is calling, resolved once per request. Absent on paths the access
