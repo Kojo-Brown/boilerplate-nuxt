@@ -841,7 +841,7 @@ still uploads.
 
 ## Phase 9 — Security & Accessibility
 
-- [ ] CSP with nonces via Nitro middleware, plus HSTS and security headers
+- [x] CSP with nonces via Nitro middleware, plus HSTS and security headers
 - [ ] Token storage hardening: httpOnly cookies only, sealed sessions, rotation
 - [ ] CSRF protection on all state-changing server routes
 - [ ] Rate limiting in Nitro middleware backed by storage
