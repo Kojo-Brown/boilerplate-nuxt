@@ -208,6 +208,50 @@ export default defineNuxtConfig({
       password: '',
       maxAge: 60 * 60 * 24 * 7,
     },
+    security: {
+      csp: {
+        // 'enforce' | 'report-only' | 'off'. Report-only is how a policy change
+        // is rolled out: the browser reports what *would* have been blocked and
+        // blocks nothing, so a directive that is one origin short shows up in
+        // the reports instead of in a support ticket.
+        // NUXT_SECURITY_CSP_MODE.
+        mode: 'enforce',
+        // Where violation reports are POSTed. A same-origin path or an absolute
+        // http(s) URL; anything else is dropped. Empty means the policy carries
+        // no `report-uri`, which is the honest default for a boilerplate that
+        // has no collector to point at. NUXT_SECURITY_CSP_REPORT_URI.
+        reportUri: '',
+        // Extra origins for `connect-src` / `img-src`, comma-separated — the API
+        // a deployment talks to, the CDN it loads images from. Same-origin needs
+        // no configuration, and quoted keywords are rejected: every keyword this
+        // policy uses is decided in server/utils/security-headers.ts, where it
+        // gets a code review. NUXT_SECURITY_CSP_CONNECT_SRC,
+        // NUXT_SECURITY_CSP_IMG_SRC.
+        connectSrc: '',
+        imgSrc: '',
+        // Who may frame this app. Empty means `'none'`, which is also what
+        // `X-Frame-Options: DENY` says to older clients.
+        // NUXT_SECURITY_CSP_FRAME_ANCESTORS.
+        frameAncestors: '',
+      },
+      hsts: {
+        // One year, the floor the preload list requires, clamped to 0…2 years.
+        // Zero is not "off": it is the documented way back off HSTS, since a
+        // browser that has already seen the header keeps honouring it until the
+        // max-age it was given expires. Sent only on TLS requests.
+        // NUXT_SECURITY_HSTS_MAX_AGE_SECONDS.
+        maxAgeSeconds: 60 * 60 * 24 * 365,
+        // NUXT_SECURITY_HSTS_INCLUDE_SUBDOMAINS.
+        includeSubdomains: true,
+        // Off by default, because submitting a domain to the preload list is
+        // close to irreversible and is not a decision a boilerplate should make
+        // for its consumer. Dropped unless includeSubdomains is on and max-age
+        // is at least a year, which is what the list requires.
+        // NUXT_SECURITY_HSTS_PRELOAD.
+        preload: false,
+      },
+    },
+
     ws: {
       // Signing key for WebSocket handshake tickets. Empty means "derive one
       // from session.password with HKDF", which is the supported default — the

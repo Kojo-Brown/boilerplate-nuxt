@@ -466,6 +466,34 @@ asset set for the one prerendered route is diffed against the `<link>` tags in
 the HTML the build wrote, because a manifest walk that a Nuxt upgrade has made
 obsolete would otherwise keep reporting confident numbers.
 
+## Security headers and CSP nonces
+
+Every response carries a policy, applied by the `request` hook in
+`server/plugins/security-headers.ts` — before Nitro's static handler, so the
+prerendered page and the `/_nuxt/` assets get it too. The `render:html` half
+writes the same request's nonce onto the inline `<script>` tags Nuxt emits, so
+the header and the document always agree.
+
+[**docs/security-headers.md**](./docs/security-headers.md) is the guide.
+
+```sh
+curl -sI localhost:3000/ | grep -i content-security-policy
+# content-security-policy: default-src 'self'; base-uri 'none'; object-src 'none';
+#   script-src 'self' 'nonce-ICdt8qflyOyD5I29SbTWSQ=='; … frame-ancestors 'none'
+```
+
+Three things the guide is there to get right. **A nonce and `'unsafe-inline'`
+are alternatives, never both** — a browser that understands the nonce ignores
+`'unsafe-inline'` in the same directive, so writing both yields a policy that
+reads strict and allows every inline script. **Prerendered and cached HTML
+cannot have a nonce**, because the body outlives the request that made it; those
+pages are served `'unsafe-inline'` instead, the set is derived from
+`route-rules.config.ts` rather than maintained by hand, and the build fails if
+`definePageMeta({ prerender: true })` freezes a page the header still thinks is
+dynamic. And **`pnpm dev` runs a weaker policy** than a build — Vite needs
+`'unsafe-eval'` and inline styles — so the policy gets signed off against
+`node .output/server/index.mjs`, never against the dev server.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).
