@@ -145,21 +145,32 @@ describe('client-side token storage', () => {
     expect(hits.filter(({ file }) => file === 'composables/useAuth.ts')).toEqual([])
   })
 
-  it('persists only the preference stores, and only their non-credential fields', () => {
+  it('persists only the preference stores, and only their non-credential fields', async () => {
     // `pinia-plugin-persistedstate` writes a whole store to localStorage under
     // its id, so a store that ever holds a credential must not be persisted.
     const storeFiles = ['stores/counter.ts', 'stores/preferences.ts']
-    const persisted: string[] = []
 
-    return Promise.all(
+    // Each file's verdict is *returned* rather than pushed into a shared array.
+    // `Promise.all` resolves in input order however the reads interleave; a push
+    // from inside the callbacks records whichever read finished first, which is
+    // an ordering this assertion would then be at the mercy of. It is not
+    // hypothetical — the pushing version passed on Node 22 and failed on Node 24
+    // in the same CI run.
+    const verdicts = await Promise.all(
       storeFiles.map(async (file) => {
         const source = await readFile(path.join(projectRoot, file), 'utf8')
-        if (/^\s*persist:/m.test(source)) persisted.push(file)
-        expect(CREDENTIAL_WORDS.test(source.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ''))).toBe(false)
+        const code = source.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '')
+
+        return {
+          file,
+          persists: /^\s*persist:/m.test(source),
+          mentionsCredential: CREDENTIAL_WORDS.test(code),
+        }
       }),
-    ).then(() => {
-      expect(persisted).toEqual(storeFiles)
-    })
+    )
+
+    expect(verdicts.filter((v) => v.mentionsCredential).map((v) => v.file)).toEqual([])
+    expect(verdicts.filter((v) => v.persists).map((v) => v.file)).toEqual(storeFiles)
   })
 
   it('exposes no token from the session composable', () => {
