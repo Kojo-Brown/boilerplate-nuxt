@@ -494,6 +494,37 @@ dynamic. And **`pnpm dev` runs a weaker policy** than a build — Vite needs
 `'unsafe-eval'` and inline styles — so the policy gets signed off against
 `node .output/server/index.mjs`, never against the dev server.
 
+## Session security: httpOnly cookies, sealed sessions, rotation
+
+The session is a sealed cookie: encrypted and signed with
+`NUXT_SESSION_PASSWORD`, with nothing about the user kept server-side. There is
+no token endpoint and nothing for the client to store — `useAuth()` returns the
+user, never a credential.
+
+[**docs/session-security.md**](./docs/session-security.md) is the guide.
+`nuxt.config.ts` sets the cookie from `HARDENED_SESSION_TRANSPORT`, and
+`server/plugins/session-hardening.ts` compares the **resolved** config against it
+at boot and refuses to start if a `NUXT_SESSION_*` override has weakened
+something:
+
+```sh
+NUXT_SESSION_COOKIE_HTTP_ONLY=false node .output/server/index.mjs
+# Refusing to start: the session configuration is not safe (1 problem).
+#   1. runtimeConfig.session.cookie.httpOnly is false, not true. …
+```
+
+Three things worth knowing. **The cookie is the only carrier**: h3 otherwise
+accepts a sealed session in an `x-nuxt-session-session` request header, which a
+script can set, so `sessionHeader` is `false` — and it has to be the _boolean_,
+because h3 tests `!== false` and an environment variable that stayed a string
+leaves the header path open while reading as though it were shut. **The session
+id rotates** every 15 minutes, on an API request, with a 30-second grace window
+for requests already in flight — and the id that rotates is one this app mints,
+because h3's own is recovered by unsealing the cookie the request carries and no
+API changes it, `replaceUserSession` included. And **a sign-in ends** after seven
+days however much it rotated, so the bound on a session is this app's rather than
+an h3 implementation detail.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).

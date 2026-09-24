@@ -27,6 +27,7 @@ export interface AnonymousRequestAuth {
 export interface AuthenticatedRequestAuth {
   readonly authenticated: true
   readonly user: User
+  /** The registry key for this session — see {@link readCredentialId}. */
   readonly sessionId: string | null
 }
 
@@ -46,7 +47,26 @@ export const ANONYMOUS_AUTH: AnonymousRequestAuth = Object.freeze({
 /** The shape of `getUserSession()`'s result that this module actually reads. */
 export interface SessionLike {
   id?: string | undefined
+  sid?: string | undefined
   user?: User | null | undefined
+}
+
+/**
+ * The identifier the session registry is keyed on.
+ *
+ * It is `sid`, which this app mints and rotates, rather than h3's own
+ * `session.id`. h3's id is stable for the life of the cookie and cannot be
+ * changed: `useSession().clear()` drops the in-context session, but the next
+ * read re-unseals the cookie the request is still carrying and recovers the same
+ * id — which is why `replaceUserSession` does not rotate it. See the note in
+ * `server/utils/session-rotation.ts`.
+ *
+ * `session.id` is the fallback so that a cookie sealed before `sid` existed is
+ * still revocable under the key it was registered with. Those sessions are
+ * rotated onto a `sid` the first time they reach the auth middleware.
+ */
+export function readCredentialId(session: SessionLike | null | undefined): string | null {
+  return session?.sid ?? session?.id ?? null
 }
 
 /**
@@ -64,7 +84,7 @@ export function createRequestAuth(session: SessionLike | null | undefined): Requ
   return {
     authenticated: true,
     user,
-    sessionId: session?.id ?? null,
+    sessionId: readCredentialId(session),
   }
 }
 

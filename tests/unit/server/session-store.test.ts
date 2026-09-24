@@ -7,6 +7,7 @@ import {
   readSessionRecord,
   recordSession,
   registerCurrentSession,
+  retireSession,
   revokeAllSessionsForUser,
   revokeSession,
   sessionStatus,
@@ -198,6 +199,73 @@ describe('revokeSession', () => {
   })
 })
 
+describe('retireSession', () => {
+  it('leaves the id working for the grace window and rejects it afterwards', async () => {
+    // What rotation needs: the requests a page already had in flight when its
+    // session id changed must not be answered 401.
+    await issue('user-1', 'sess-1')
+    expect(await retireSession(store, 'user-1', 'sess-1', 30, NOW)).toBe(true)
+
+    const record = await readSessionRecord(store, 'user-1', 'sess-1')
+    expect(sessionStatus(record, NOW)).toBe('active')
+    expect(sessionStatus(record, NOW + 29_000)).toBe('active')
+    expect(sessionStatus(record, NOW + 30_000)).toBe('revoked')
+  })
+
+  it('never schedules a retirement past the record’s own expiry', async () => {
+    const issued = await issue('user-1', 'sess-1')
+    await retireSession(store, 'user-1', 'sess-1', HOUR_SECONDS * 10, NOW)
+
+    expect(await readSessionRecord(store, 'user-1', 'sess-1')).toMatchObject({
+      revokedAt: issued.expiresAt,
+    })
+  })
+
+  it('keeps an earlier deadline rather than extending a pending retirement', async () => {
+    // Rotation must never buy an id more life than something else already gave it.
+    await issue('user-1', 'sess-1')
+    await retireSession(store, 'user-1', 'sess-1', 10, NOW)
+    await retireSession(store, 'user-1', 'sess-1', 300, NOW)
+
+    expect(await readSessionRecord(store, 'user-1', 'sess-1')).toMatchObject({
+      revokedAt: NOW + 10_000,
+    })
+  })
+
+  it('is overridden by a real revocation, which takes effect immediately', async () => {
+    // Signing out during someone else's grace window ends the session now.
+    await issue('user-1', 'sess-1')
+    await retireSession(store, 'user-1', 'sess-1', 300, NOW)
+
+    expect(await revokeSession(store, 'user-1', 'sess-1', NOW + 1)).toBe(true)
+    expect(sessionStatus(await readSessionRecord(store, 'user-1', 'sess-1'), NOW + 2)).toBe(
+      'revoked',
+    )
+  })
+
+  it('reports false for an unknown, already-revoked or expired session', async () => {
+    const issued = await issue('user-1', 'sess-1')
+
+    expect(await retireSession(store, 'user-1', 'sess-unknown', 30, NOW)).toBe(false)
+    expect(await retireSession(store, 'user-1', 'sess-1', 30, issued.expiresAt + 1)).toBe(false)
+
+    await revokeSession(store, 'user-1', 'sess-1', NOW)
+    expect(await retireSession(store, 'user-1', 'sess-1', 30, NOW + 1)).toBe(false)
+  })
+
+  it('preserves the rest of the record', async () => {
+    const issued = await issue('user-1', 'sess-1')
+    await retireSession(store, 'user-1', 'sess-1', 30, NOW)
+
+    expect(await readSessionRecord(store, 'user-1', 'sess-1')).toMatchObject({
+      userId: issued.userId,
+      provider: issued.provider,
+      createdAt: issued.createdAt,
+      expiresAt: issued.expiresAt,
+    })
+  })
+})
+
 describe('revokeAllSessionsForUser', () => {
   it('revokes every live session that user has', async () => {
     await issue('user-1', 'laptop')
@@ -252,7 +320,7 @@ describe('revokeAllSessionsForUser', () => {
 
 describe('registerCurrentSession', () => {
   /** Whatever `getUserSession()` should return for the session just issued. */
-  let issued: { id?: string } = {}
+  let issued: { id?: string; sid?: string } = {}
   const user = {
     id: 'user-1',
     email: 'alice@example.com',
@@ -264,7 +332,7 @@ describe('registerCurrentSession', () => {
   const event = {} as H3Event
 
   beforeEach(() => {
-    issued = { id: 'sess-1' }
+    issued = { sid: 'sess-1' }
     vi.stubGlobal('getUserSession', async () => issued)
     vi.stubGlobal('useStorage', () => store)
     vi.stubGlobal('useRuntimeConfig', () => ({ session: { maxAge: HOUR_SECONDS } }))
@@ -301,7 +369,23 @@ describe('registerCurrentSession', () => {
     expect(record!.expiresAt - record!.createdAt).toBe(3600 * 1000)
   })
 
-  it('writes nothing when the session carries no id', async () => {
+  it('keys the record on the sid, not on h3’s stable session id', async () => {
+    // The sid is what rotation replaces. Registering under h3's id instead would
+    // leave rotation with nothing to retire.
+    issued = { id: 'h3-id', sid: 'sess-1' }
+    await registerCurrentSession(event, user)
+
+    expect(await store.getKeys()).toEqual([sessionStoreKey('user-1', 'sess-1')])
+  })
+
+  it('falls back to the h3 id for a session sealed before sid existed', async () => {
+    issued = { id: 'legacy-id' }
+    await registerCurrentSession(event, user)
+
+    expect(await store.getKeys()).toEqual([sessionStoreKey('user-1', 'legacy-id')])
+  })
+
+  it('writes nothing when the session carries no id at all', async () => {
     issued = {}
     await registerCurrentSession(event, user)
 

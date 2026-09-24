@@ -5,7 +5,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import requestContextMiddleware from '~/server/middleware/00.request-context'
 import authMiddleware from '~/server/middleware/10.auth'
 import { ANONYMOUS_AUTH } from '~/server/utils/request-auth'
-import { recordSession, revokeSession, type SessionRecord } from '~/server/utils/session-store'
+import {
+  readSessionRecord,
+  recordSession,
+  revokeSession,
+  sessionStatus,
+  type SessionRecord,
+} from '~/server/utils/session-store'
 
 /**
  * The middleware handlers themselves, invoked directly.
@@ -70,6 +76,11 @@ beforeEach(() => {
   storageFails = false
   cleared = 0
 
+  // `vi.unstubAllGlobals()` in the afterEach below takes tests/setup.ts's stubs
+  // with it, so this one is re-established here rather than inherited. `{}` is
+  // the shape of a deployment that configures no rotation, which is what every
+  // test outside the rotation block below is asserting against.
+  vi.stubGlobal('useRuntimeConfig', () => ({}))
   vi.stubGlobal('getRequestHeader', (event: FakeEvent, name: string) => event.requestHeaders[name])
   vi.stubGlobal('setResponseHeader', (event: FakeEvent, name: string, value: string) => {
     event.responseHeaders[name] = value
@@ -342,5 +353,184 @@ describe('10.auth session revocation', () => {
     session = { user: { id: 'user-1' } }
 
     await expect(run(authMiddleware, createEvent('/api/todos'))).resolves.toBeUndefined()
+  })
+})
+
+/**
+ * Rotation and the absolute lifetime cap, driven through the middleware.
+ *
+ * The rest of this file leaves `useRuntimeConfig` as the `{}` stub from
+ * tests/setup.ts, which resolves to rotation being off — so those tests also
+ * pin that a deployment that configures nothing keeps the behaviour it had.
+ * This block turns it on.
+ *
+ * `replaceUserSession` is faked rather than mocked, for the reason the storage
+ * comment above gives: what matters is that the id the caller ends up with is a
+ * new one and that the registry describes it, and a call-recording mock asserts
+ * neither.
+ */
+describe('10.auth session rotation', () => {
+  const WEEK_SECONDS = 60 * 60 * 24 * 7
+  let written: Record<string, unknown> | null
+
+  function configure(rotation: Record<string, number>): void {
+    vi.stubGlobal('useRuntimeConfig', () => ({
+      session: { maxAge: WEEK_SECONDS },
+      sessionRotation: rotation,
+    }))
+  }
+
+  beforeEach(() => {
+    written = null
+    vi.stubGlobal('setUserSession', async (_event: unknown, data: Record<string, unknown>) => {
+      written = data
+      // h3 merges and keeps `id`, which is recovered from the request's cookie.
+      // Only `sid`, which this app mints, changes.
+      session = { ...session, ...data } as typeof session
+    })
+    configure({ intervalSeconds: 900, absoluteMaxAgeSeconds: WEEK_SECONDS, graceSeconds: 30 })
+  })
+
+  /** The credential id the rotation wrote into the session. */
+  function rotatedId(): string {
+    return written?.['sid'] as string
+  }
+
+  /**
+   * A session that signed in `ageMinutes` ago and rotated `rotatedMinutes` ago.
+   *
+   * The user carries a `provider` where the tests above do not: rotation writes
+   * a registry record from it, and `readSessionRecord` reads a record with a
+   * missing `provider` back as "not a record".
+   */
+  function signedIn(ageMinutes: number, rotatedMinutes = ageMinutes): void {
+    const now = Date.now()
+    session = {
+      id: 'h3-id-fixed',
+      sid: 'sess-1',
+      user: { id: 'user-1', provider: 'credentials' },
+      issuedAt: now - ageMinutes * 60_000,
+      rotatedAt: now - rotatedMinutes * 60_000,
+    } as typeof session
+  }
+
+  it('leaves a freshly rotated session alone', async () => {
+    await issue('user-1', 'sess-1')
+    signedIn(60, 1)
+    const event = createEvent('/api/todos')
+
+    await expect(run(authMiddleware, event)).resolves.toBeUndefined()
+    expect(written).toBeNull()
+    expect(event.context['auth']).toMatchObject({ sessionId: 'sess-1' })
+  })
+
+  it('rotates a session that has reached the interval, and re-points the context', async () => {
+    // `logout.post.ts` revokes by `auth.sessionId`, so the context has to name
+    // the id the caller now holds rather than the one it arrived with.
+    await issue('user-1', 'sess-1')
+    signedIn(60, 20)
+    const event = createEvent('/api/todos')
+
+    await expect(run(authMiddleware, event)).resolves.toBeUndefined()
+    expect(event.context['auth']).toMatchObject({ authenticated: true, sessionId: rotatedId() })
+    expect(rotatedId()).not.toBe('sess-1')
+  })
+
+  it('registers the rotated id and retires the old one after the grace window', async () => {
+    await issue('user-1', 'sess-1')
+    signedIn(60, 20)
+    const now = Date.now()
+
+    await run(authMiddleware, createEvent('/api/todos'))
+
+    expect(sessionStatus(await readSessionRecord(sessionStore, 'user-1', rotatedId()), now)).toBe(
+      'active',
+    )
+    const old = await readSessionRecord(sessionStore, 'user-1', 'sess-1')
+    expect(sessionStatus(old, now)).toBe('active')
+    expect(sessionStatus(old, now + 31_000)).toBe('revoked')
+  })
+
+  it('keeps the sign-in time across the rotation', async () => {
+    await issue('user-1', 'sess-1')
+    signedIn(60, 20)
+    const issuedAt = (session as { issuedAt: number }).issuedAt
+
+    await run(authMiddleware, createEvent('/api/todos'))
+
+    expect(written).toMatchObject({ issuedAt })
+  })
+
+  it('adopts a session sealed before rotation existed rather than expiring it', async () => {
+    // Expiring an unmarked session would sign out every existing user on deploy.
+    session = { id: 'legacy-h3-id', user: { id: 'user-1', provider: 'credentials' } }
+
+    await expect(run(authMiddleware, createEvent('/api/todos'))).resolves.toBeUndefined()
+    expect(written).toMatchObject({ user: { id: 'user-1' } })
+    // It leaves with a `sid` it did not arrive with, which is what adopting means.
+    expect(rotatedId()).toBeTypeOf('string')
+  })
+
+  it('ends a session that has hit the absolute cap, with its own message', async () => {
+    await issue('user-1', 'sess-1')
+    signedIn(WEEK_SECONDS / 60 + 1, 1)
+    const event = createEvent('/api/todos')
+    event.context['requestId'] = 'req-capped-1'
+
+    await expect(run(authMiddleware, event)).rejects.toMatchObject({
+      statusCode: 401,
+      message: 'Session expired; sign in again',
+      data: { requestId: 'req-capped-1' },
+    })
+    expect(cleared).toBe(1)
+  })
+
+  it('revokes the capped session rather than only dropping the cookie', async () => {
+    await issue('user-1', 'sess-1')
+    signedIn(WEEK_SECONDS / 60 + 1, 1)
+
+    await expect(run(authMiddleware, createEvent('/api/todos'))).rejects.toThrow()
+    expect(
+      sessionStatus(await readSessionRecord(sessionStore, 'user-1', 'sess-1'), Date.now()),
+    ).toBe('revoked')
+  })
+
+  it('does not rotate an anonymous caller on a public route', async () => {
+    const event = createEvent('/api/route-rules/swr')
+
+    await expect(run(authMiddleware, event)).resolves.toBeUndefined()
+    expect(written).toBeNull()
+  })
+
+  it('rejects a revoked session before rotating it back to life', async () => {
+    // Order matters: rotating first would mint a fresh, unrevoked id for a
+    // session someone had deliberately ended.
+    await issue('user-1', 'sess-1')
+    await revokeSession(sessionStore, 'user-1', 'sess-1')
+    signedIn(60, 20)
+
+    await expect(run(authMiddleware, createEvent('/api/todos'))).rejects.toMatchObject({
+      message: 'Session revoked',
+    })
+    expect(written).toBeNull()
+  })
+
+  it('does nothing when rotation is configured off', async () => {
+    configure({ intervalSeconds: 0, absoluteMaxAgeSeconds: 0, graceSeconds: 30 })
+    await issue('user-1', 'sess-1')
+    signedIn(60 * 24 * 30)
+
+    await expect(run(authMiddleware, createEvent('/api/todos'))).resolves.toBeUndefined()
+    expect(written).toBeNull()
+  })
+
+  it('still applies the cap when rotation is off', async () => {
+    configure({ intervalSeconds: 0, absoluteMaxAgeSeconds: WEEK_SECONDS, graceSeconds: 30 })
+    await issue('user-1', 'sess-1')
+    signedIn(WEEK_SECONDS / 60 + 1)
+
+    await expect(run(authMiddleware, createEvent('/api/todos'))).rejects.toMatchObject({
+      statusCode: 401,
+    })
   })
 })

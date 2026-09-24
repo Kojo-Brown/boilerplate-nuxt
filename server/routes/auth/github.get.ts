@@ -1,5 +1,6 @@
 import type { User } from '#auth-utils'
 
+import { signInSession } from '~/server/utils/session-rotation'
 import { registerCurrentSession } from '~/server/utils/session-store'
 
 export default defineOAuthGitHubEventHandler({
@@ -16,11 +17,13 @@ export default defineOAuthGitHubEventHandler({
       provider: 'github',
     }
 
-    await setUserSession(event, { user })
+    // Minted and stamped for the reasons the credentials path spells out in
+    // `server/api/auth/login.post.ts`.
+    await setUserSession(event, signInSession(user))
 
     // Same as the credentials path in `api/auth/login.post.ts`: the session id
-    // exists only after `setUserSession`, and registering it is what makes this
-    // session revocable. See server/utils/session-store.ts.
+    // exists only once the session has been minted, and registering it is what
+    // makes this session revocable. See server/utils/session-store.ts.
     await registerCurrentSession(event, user)
 
     return sendRedirect(event, '/')
