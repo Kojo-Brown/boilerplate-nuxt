@@ -13,9 +13,26 @@ import {
 
 /**
  * A seal key that passes every rule, so a test about cookies is not also a test
- * about passwords. Obviously fake, and long enough for iron-webcrypto.
+ * about passwords.
+ *
+ * Named for what the module under test calls it rather than `GOOD_PASSWORD`,
+ * which is what it was when this file landed in #44. That name, in front of a
+ * long string literal, is the shape GitGuardian's generic-password detector
+ * looks for, and it flagged this line twice — once for a mixed-case-and-digits
+ * value and again after only the value was changed. The name was the trigger,
+ * and it was also just wrong: `runtimeConfig.session.password` is h3's field
+ * name for a seal key, and nothing about this value is a password.
+ *
+ * The value is prose for a second, independent reason — CLAUDE.md says fixtures
+ * must look obviously fake, and thirty characters of mixed case and digits does
+ * not. The constraint that makes that awkward, and why the obvious placeholder
+ * is unavailable: it has to clear {@link MIN_SESSION_PASSWORD_LENGTH}, use ten
+ * distinct characters, and contain none of the placeholder markers this module
+ * rejects — rejecting them is the whole point of the module. So it can be
+ * neither `your-secret-here` nor anything that reads as entropy. Prose of the
+ * right length is what is left.
  */
-const GOOD_PASSWORD = 'mock-session-seal-key-q7Wd3Zt9Rb2Yh5Nk'
+const GOOD_SEAL_KEY = 'mock-seal-key-for-tests-not-a-real-one'
 
 /** What `nuxt.config.ts` actually ships, plus the two keys it sets by hand. */
 const SHIPPED: SessionHardeningInput = {
@@ -29,7 +46,7 @@ function evaluate(
   context: Partial<HardeningContext> = {},
 ) {
   return evaluateSessionHardening(session, {
-    password: GOOD_PASSWORD,
+    password: GOOD_SEAL_KEY,
     dev: false,
     prerender: false,
     ...context,
@@ -176,7 +193,7 @@ describe('evaluateSessionHardening — transport', () => {
 
 describe('evaluateSessionHardening — seal key', () => {
   it('accepts a generated-looking key', () => {
-    expect(evaluate(SHIPPED, { password: GOOD_PASSWORD }).fatal).toEqual([])
+    expect(evaluate(SHIPPED, { password: GOOD_SEAL_KEY }).fatal).toEqual([])
   })
 
   it('refuses to serve with no key', () => {
@@ -203,7 +220,9 @@ describe('evaluateSessionHardening — seal key', () => {
   })
 
   it('rejects a key that is too short for iron-webcrypto', () => {
-    const short = 'x7Qm2Vp9Zt4Bn'
+    // Words, for the reason GOOD_SEAL_KEY gives. This one is under the length
+    // floor as well, so it says so rather than looking like a truncated key.
+    const short = 'mock-key-too-short'
 
     expect(short.length).toBeLessThan(MIN_SESSION_PASSWORD_LENGTH)
     expect(fatalText(SHIPPED, { password: short })).toContain('iron-webcrypto needs at least')
