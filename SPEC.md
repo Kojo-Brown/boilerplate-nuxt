@@ -842,7 +842,7 @@ still uploads.
 ## Phase 9 — Security & Accessibility
 
 - [x] CSP with nonces via Nitro middleware, plus HSTS and security headers
-- [ ] Token storage hardening: httpOnly cookies only, sealed sessions, rotation
+- [x] Token storage hardening: httpOnly cookies only, sealed sessions, rotation — the cookie is now the only carrier (h3's session request header was open), the resolved config is audited at boot, and the session id rotates on an app-minted `sid` because h3's own cannot be rotated (PR #44)
 - [ ] CSRF protection on all state-changing server routes
 - [ ] Rate limiting in Nitro middleware backed by storage
 - [ ] OWASP Top 10 checklist with a test per mitigation
