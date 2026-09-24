@@ -1,6 +1,13 @@
 import { resolveAccess } from '~/server/utils/access-policy'
 import { normalisePathname } from '~/server/utils/request-path'
 import { createRequestAuth, type AuthenticatedRequestAuth } from '~/server/utils/request-auth'
+import {
+  endExpiredSession,
+  readSessionMarks,
+  resolveRotationSettings,
+  rotateCurrentSession,
+  rotationVerdict,
+} from '~/server/utils/session-rotation'
 import { readSessionRecord, sessionStatus, useSessionStore } from '~/server/utils/session-store'
 
 /**
@@ -17,6 +24,10 @@ import { readSessionRecord, sessionStatus, useSessionStore } from '~/server/util
  *  3. Rejects a session the session registry has marked revoked, which is the
  *     only way a sealed-cookie session can be ended before it expires. See
  *     `server/utils/session-store.ts`.
+ *  4. Rotates a session id that has reached its rotation interval, and ends one
+ *     that has reached its absolute lifetime. See
+ *     `server/utils/session-rotation.ts` for both clocks and for why rotation
+ *     is a decision taken here rather than on a schedule.
  *
  * The honest note on (1): h3 already caches the unsealed session on
  * `event.context.sessions`, so calling `getUserSession()` in five handlers costs
@@ -32,7 +43,10 @@ import { readSessionRecord, sessionStatus, useSessionStore } from '~/server/util
  * `unmanaged` paths (pages, payloads, assets) are left alone. The session cookie
  * is not unsealed for them, and `event.context.auth` is not set: page auth is
  * already the route guard's and Nuxt's session plugin's job, and doing the work
- * again for every `.js` chunk would be pure overhead.
+ * again for every `.js` chunk would be pure overhead. The honest consequence for
+ * (4): a session that only ever loads pages is never rotated. It is still
+ * capped, because the cap is checked in the same place and the app cannot do
+ * anything useful without an API call.
  */
 export default defineEventHandler(async (event) => {
   const access = resolveAccess(normalisePathname(event.path))
@@ -51,7 +65,9 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  if (auth.authenticated && (await isRevoked(auth))) {
+  if (!auth.authenticated) return
+
+  if (await isRevoked(auth)) {
     // The cookie is cryptographically valid, so the browser will keep sending it
     // until it expires. Clearing it turns one revoked session into one 401
     // rather than a 401 on every subsequent request.
@@ -61,6 +77,34 @@ export default defineEventHandler(async (event) => {
       message: 'Session revoked',
       data: { requestId: event.context.requestId },
     })
+  }
+
+  const settings = resolveRotationSettings(useRuntimeConfig(event))
+  const now = Date.now()
+  const marks = readSessionMarks(session)
+  const verdict = rotationVerdict(marks, settings, now)
+
+  if (verdict === 'expired') {
+    // The cap is not a revocation the user asked for, so it gets its own message
+    // — a client that sees this should send the person to sign in again, not
+    // report that their session was ended by someone else.
+    await endExpiredSession(event, auth, now)
+    throw createError({
+      statusCode: 401,
+      message: 'Session expired; sign in again',
+      data: { requestId: event.context.requestId },
+    })
+  }
+
+  if (verdict === 'rotate') {
+    const sessionId = await rotateCurrentSession(event, auth, marks, settings, now)
+
+    // Handlers read `sessionId` off the auth context — `logout.post.ts` revokes
+    // by it — so it has to name the id the caller now holds. Rewritten rather
+    // than mutated because `RequestAuth` is readonly all the way down.
+    if (sessionId !== null) {
+      event.context.auth = { ...auth, sessionId }
+    }
   }
 })
 

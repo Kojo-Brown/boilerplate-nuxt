@@ -4,6 +4,7 @@ import {
   ANONYMOUS_AUTH,
   createRequestAuth,
   isAuthenticated,
+  readCredentialId,
   requireAuth,
   type RequestAuth,
 } from '~/server/utils/request-auth'
@@ -125,5 +126,38 @@ describe('requireAuth', () => {
     expect(thrown).toMatchObject({ statusCode: 500 })
     expect((thrown as Error).message).toContain('/api/orphan')
     expect((thrown as Error).message).toContain('server/utils/access-policy.ts')
+  })
+})
+
+describe('readCredentialId', () => {
+  const alice = {
+    id: 'user-1',
+    email: 'alice@example.com',
+    name: 'Alice',
+    provider: 'credentials' as const,
+  }
+
+  it('prefers the sid this app mints over h3’s own session id', () => {
+    // h3's id is recovered by unsealing whatever cookie the request carries, so
+    // it never changes. Keying the registry on it would make rotation a no-op.
+    expect(readCredentialId({ id: 'h3-id', sid: 'rotating-id', user: alice })).toBe('rotating-id')
+  })
+
+  it('falls back to the h3 id for a cookie sealed before sid existed', () => {
+    // Those sessions were registered under that key, so it is what revokes them
+    // until the middleware rotates them onto a sid.
+    expect(readCredentialId({ id: 'legacy-id', user: alice })).toBe('legacy-id')
+  })
+
+  it('reports null when there is neither', () => {
+    expect(readCredentialId({})).toBeNull()
+    expect(readCredentialId(null)).toBeNull()
+    expect(readCredentialId(undefined)).toBeNull()
+  })
+
+  it('is what createRequestAuth puts on the context', () => {
+    expect(createRequestAuth({ id: 'h3-id', sid: 'rotating-id', user: alice })).toMatchObject({
+      sessionId: 'rotating-id',
+    })
   })
 })

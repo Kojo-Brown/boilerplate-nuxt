@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite'
 import { imageConfig } from './image.config'
+import { HARDENED_SESSION_TRANSPORT } from './server/utils/session-hardening'
 import { routeRules } from './route-rules.config'
 import { VITALS_ENDPOINT } from './types/vitals'
 
@@ -201,12 +202,50 @@ export default defineNuxtConfig({
       // server/utils/vitals-sink.ts. NUXT_VITALS_TIMEOUT_MS.
       timeoutMs: 3000,
     },
+    // The session cookie's security configuration. nuxt-auth-utils hands this
+    // object straight to h3's `useSession`, and every field below is checked at
+    // boot by `server/plugins/session-hardening.ts` — a deployment that
+    // overrides one of them into something weaker does not start. See
+    // docs/session-security.md.
     session: {
       // Placeholder only — nuxt-auth-utils requires the key to be present in the
       // schema. The real value comes from NUXT_SESSION_PASSWORD at runtime and
       // the server refuses to start without it.
       password: '',
       maxAge: 60 * 60 * 24 * 7,
+      // Stated so the cookie name is greppable and so the boot check can name
+      // the request header it disables.
+      name: 'nuxt-session',
+      // `sessionHeader: false` plus the four cookie attributes. h3 already
+      // defaults httpOnly/secure/path and the module defaults sameSite, so this
+      // changes only `sessionHeader` — the rest are stated because a default is
+      // only true until someone edits a file nobody reviews, and because the
+      // boot check needs something to compare the resolved config against.
+      ...HARDENED_SESSION_TRANSPORT,
+    },
+
+    // Session id rotation. A sibling of `session` rather than a key inside it,
+    // because everything in `session` is handed verbatim to h3 as its
+    // `SessionConfig` and none of this is h3's. The environment variables are
+    // the same either way (NUXT_SESSION_ROTATION_*).
+    //
+    // See server/utils/session-rotation.ts for the two clocks and
+    // docs/session-security.md for the operator's view. All three are clamped,
+    // and NUXT_SESSION_ROTATION_INTERVAL_SECONDS=0 turns rotation off without
+    // disabling the cap.
+    sessionRotation: {
+      // How old an id may get before it is replaced, on the next API request.
+      // Fifteen minutes puts roughly one extra storage write per session per
+      // quarter hour against a captured cookie's useful life.
+      intervalSeconds: 60 * 15,
+      // How long one sign-in lasts, rotations included. h3 already bounds a
+      // session at `maxAge` from its creation — a reseal keeps `createdAt`, so
+      // rotation does not extend it — and this makes that bound the app's own:
+      // settable shorter, revoked in the registry, and answered as a named 401.
+      absoluteMaxAgeSeconds: 60 * 60 * 24 * 7,
+      // How long the replaced id keeps working, so the requests a page already
+      // had in flight when it rotated are not answered 401.
+      graceSeconds: 30,
     },
     security: {
       csp: {
