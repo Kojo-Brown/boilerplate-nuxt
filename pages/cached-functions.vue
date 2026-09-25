@@ -12,6 +12,7 @@
  * through `refresh()`; a plain re-render would show this page's own payload
  * rather than the server's. See docs/nitro-cached-functions.md.
  */
+import { csrfRequestInit } from '~/utils/csrf'
 import type { CatalogPage } from '~/server/api/cached/catalog.get'
 import type { CatalogItemResponse } from '~/server/api/cached/catalog/[id].get'
 import type { InvalidationSummary } from '~/server/api/cached/invalidate.post'
@@ -43,6 +44,7 @@ async function invalidate(tags: string[]) {
     const response = await $fetch<ApiResponse<InvalidationSummary>>('/api/cached/invalidate', {
       method: 'POST',
       body: { tags },
+      ...(await csrfRequestInit()),
     })
     lastInvalidation.value = response.data
     await refreshAll()

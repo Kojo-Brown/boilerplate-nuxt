@@ -525,6 +525,33 @@ API changes it, `replaceUserSession` included. And **a sign-in ends** after seve
 days however much it rotated, so the bound on a session is this app's rather than
 an h3 implementation detail.
 
+## CSRF: origin check and signed double-submit token
+
+The session cookie is ambient authority — the browser attaches it because of
+where a request is going, not where it came from. `server/middleware/20.csrf.ts`
+refuses any state-changing request that cannot show it came from this origin,
+on every path and not only `/api`.
+
+[**docs/csrf.md**](./docs/csrf.md) is the guide.
+
+```sh
+curl -sX POST localhost:3000/api/auth/login -H 'origin: https://evil.test' | jq .data
+# { "code": "CSRF_REJECTED", "reason": "cross-origin", "requestId": "…" }
+```
+
+A public route, because the gate runs _after_ auth: a forged request to a
+protected route is answered 401 first, which is the right answer to it.
+
+Three things the guide is there to get right. **`SameSite=Lax` is not enough**:
+a sibling origin is the same _site_, so `cdn.app.test` posting to `app.test`
+carries the session cookie — which is the gap the `Sec-Fetch-Site` / `Origin`
+check exists to close. **The token is a MAC, and its cookie is `__Host-`
+prefixed**, so it can neither be invented without the signing key nor planted by
+another host; a plain double-submit has neither property. And **the cookie is
+issued on document responses only**, because a `Set-Cookie` on a prerendered
+page, an `swr` response or a `/_nuxt/` asset would hand one visitor's token to
+everyone the cache serves next — everything else asks `GET /api/auth/csrf`.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).

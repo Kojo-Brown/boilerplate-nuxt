@@ -1,5 +1,6 @@
 import { onScopeDispose, readonly, ref, shallowRef, type Ref, type ShallowRef } from 'vue'
 
+import { csrfRequestInit } from '~/utils/csrf'
 import type { ApiResponse } from '~/types/api'
 import {
   WsCloseCode,
@@ -384,6 +385,7 @@ async function defaultFetchTicket(channel: WsChannel): Promise<WsTicketResponse>
   const response = await $fetch<ApiResponse<WsTicketResponse>>('/api/ws/ticket', {
     method: 'POST',
     body: { channel },
+    ...(await csrfRequestInit()),
   })
   return response.data
 }

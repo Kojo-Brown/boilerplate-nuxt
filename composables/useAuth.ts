@@ -1,5 +1,7 @@
 import { ref, readonly } from 'vue'
 
+import { csrfRequestInit } from '~/utils/csrf'
+
 export interface AuthUser {
   id: string
   email: string
@@ -22,6 +24,7 @@ export function useAuth() {
       await $fetch('/api/auth/login', {
         method: 'POST',
         body: { email, password },
+        ...(await csrfRequestInit()),
       })
       await refreshSession()
       await navigateTo('/')
@@ -55,7 +58,11 @@ export function useAuth() {
   async function logout(scope: 'current' | 'all' = 'current'): Promise<void> {
     error.value = null
     try {
-      await $fetch('/api/auth/logout', { method: 'POST', body: { scope } })
+      await $fetch('/api/auth/logout', {
+        method: 'POST',
+        body: { scope },
+        ...(await csrfRequestInit()),
+      })
     } catch (err: unknown) {
       const typedErr = err as { data?: { message?: string } }
       error.value = typedErr.data?.message ?? 'Sign-out completed on this device only.'

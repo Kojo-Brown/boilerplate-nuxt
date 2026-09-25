@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { csrfRequestInit } from '~/utils/csrf'
+
 definePageMeta({ layout: false })
 
 const { t } = useI18n()
@@ -21,6 +23,7 @@ async function handleCredentialsLogin() {
     await $fetch('/api/auth/login', {
       method: 'POST',
       body: { email: email.value, password: password.value },
+      ...(await csrfRequestInit()),
     })
     await refreshSession()
     await navigateTo('/')

@@ -1,3 +1,4 @@
+import { csrfRequestInit } from '~/utils/csrf'
 import type { ApiResponse, Upload, PresignResponse } from '~/types/api'
 
 export interface FileUploadState {
@@ -37,6 +38,7 @@ export function useFileUpload(): UseFileUploadReturn {
       const presign = await $fetch<ApiResponse<PresignResponse>>('/api/uploads/presign', {
         method: 'POST',
         body: { filename: file.name, contentType: file.type, size: file.size },
+        ...(await csrfRequestInit()),
       })
 
       state.progress = 20
@@ -60,6 +62,7 @@ export function useFileUpload(): UseFileUploadReturn {
           size: file.size,
           url: presign.data.publicUrl,
         },
+        ...(await csrfRequestInit()),
       })
 
       state.progress = 100
