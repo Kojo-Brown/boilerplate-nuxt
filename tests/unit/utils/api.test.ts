@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import { createApiClient } from '../../../utils/api'
+import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from '../../../types/csrf'
 
 // Nuxt auto-import stubs. These are read when the interceptors run, not when the
 // module is evaluated, so setting them here is soon enough.
@@ -20,7 +21,7 @@ if (typeof globalThis.crypto === 'undefined') {
 describe('createApiClient', () => {
   type CapturedOptions = {
     baseURL?: string
-    onRequest?: (ctx: { options: Record<string, unknown> }) => void
+    onRequest?: (ctx: { options: Record<string, unknown> }) => void | Promise<void>
     onResponse?: (ctx: {
       request: unknown
       response: { status: number }
@@ -35,6 +36,10 @@ describe('createApiClient', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // No document unless a test says otherwise, which is both the SSR case and
+    // the default this suite's node environment gives. Reset per test because
+    // `vi.stubGlobal` outlives `clearAllMocks`.
+    vi.stubGlobal('document', undefined)
     capturedOptions = {}
     mockFetchCreate.mockImplementation((opts: CapturedOptions) => {
       capturedOptions = opts
@@ -86,6 +91,40 @@ describe('createApiClient', () => {
       const headers = options['headers'] as Headers
       expect(headers.get('authorization')).toBe('Bearer token123')
       expect(headers.get('x-correlation-id')).toBeTruthy()
+    })
+
+    it('attaches the CSRF token to a write, read from the cookie jar', async () => {
+      vi.stubGlobal('document', { cookie: `${CSRF_COOKIE_NAME}=token-from-cookie` })
+      createApiClient()
+      const options: Record<string, unknown> = { method: 'POST' }
+
+      await capturedOptions.onRequest?.({ options })
+
+      expect((options['headers'] as Headers).get(CSRF_HEADER_NAME)).toBe('token-from-cookie')
+    })
+
+    it('does not attach it to a read, which the server does not check', async () => {
+      vi.stubGlobal('document', { cookie: `${CSRF_COOKIE_NAME}=token-from-cookie` })
+      createApiClient()
+      const options: Record<string, unknown> = { method: 'GET' }
+
+      await capturedOptions.onRequest?.({ options })
+
+      expect((options['headers'] as Headers).get(CSRF_HEADER_NAME)).toBeNull()
+    })
+
+    it('leaves the write unheadered when there is no token to be had', async () => {
+      // SSR, and the node test environment: no document, so nothing to read and
+      // nowhere to fetch one from. The request goes out and the server answers
+      // with a 403 that names the reason, which is a better error than one
+      // thrown from inside an interceptor.
+      createApiClient()
+      const options: Record<string, unknown> = { method: 'POST' }
+
+      await capturedOptions.onRequest?.({ options })
+
+      expect((options['headers'] as Headers).get(CSRF_HEADER_NAME)).toBeNull()
+      expect((options['headers'] as Headers).get('x-correlation-id')).toBeTruthy()
     })
 
     it('stores _meta with correlationId and startTime on the options object', () => {

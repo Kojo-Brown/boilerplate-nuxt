@@ -2,17 +2,25 @@
 
 Everything in `server/middleware/` runs on **every request Nitro handles**,
 before any route handler, in **filename order**. That is the whole mechanism —
-there is no registration step and no ordering config, which is why the two files
+there is no registration step and no ordering config, which is why the files
 here are numbered:
 
 | File                                      | Runs | Does                                                                       |
 | ----------------------------------------- | ---- | -------------------------------------------------------------------------- |
 | `server/middleware/00.request-context.ts` | 1st  | Resolves a request id, stamps the arrival time, echoes `x-request-id`      |
 | `server/middleware/10.auth.ts`            | 2nd  | Resolves the session into `event.context.auth`, enforces the access policy |
+| `server/middleware/20.csrf.ts`            | 3rd  | Refuses a state-changing request that cannot show it came from this origin |
 
 Rename `00.request-context.ts` to `request-context.ts` and it sorts _after_
 `10.auth.ts`, which would leave the 401 thrown in the auth middleware with no
 request id to report. The numbers are load-bearing.
+
+The CSRF gate runs _after_ auth rather than before, so that a request which is
+both unauthenticated and forged is answered 401 rather than 403: the caller has
+no session for anyone to forge a request with, and telling them about a token
+they do not need would be a worse answer to a worse question. It costs nothing,
+because the gate reads no session of its own. See
+[docs/csrf.md](./csrf.md).
 
 Security response headers are the one piece of request-scoped work that is
 deliberately **not** here. Nitro serves `public/` and every prerendered page from
@@ -258,3 +266,6 @@ logged-out visitor.
 3. Read the user with `requireAuth(event)`, not `event.context.auth`.
 4. If a page reads it during SSR, use `useRequestFetch()`.
 5. If it needs a session, do not give it a `swr`/`isr`/`prerender` route rule.
+6. If it is a write, the browser has to send `x-csrf-token` — `utils/api.ts`
+   does that for anything going through the `/api` client, and a raw `$fetch`
+   spreads `csrfRequestInit()` into its options. See [docs/csrf.md](./csrf.md).

@@ -273,6 +273,23 @@ export default defineNuxtConfig({
         // NUXT_SECURITY_CSP_FRAME_ANCESTORS.
         frameAncestors: '',
       },
+      csrf: {
+        // Token lifetime in seconds, clamped to 300…604800. Twelve hours spans a
+        // working day without a page needing to refetch, and a token this long
+        // is still bounded — it is a bearer value in a JS-readable cookie, which
+        // is what the ceiling is for. The gate re-issues at half life on any
+        // document response, so an active tab never reaches the end of it.
+        // NUXT_SECURITY_CSRF_TOKEN_TTL_SECONDS.
+        tokenTtlSeconds: 60 * 60 * 12,
+        // Extra origins allowed to make state-changing requests,
+        // comma-separated — a separate front end, a sibling subdomain that
+        // genuinely posts here. The request's own host is always allowed, so
+        // same-origin needs no configuration, and a sibling that is *not* listed
+        // is refused even though `SameSite=Lax` would have sent the cookie. That
+        // is the main thing this gate adds over the cookie attribute; see
+        // docs/csrf.md. NUXT_SECURITY_CSRF_ALLOWED_ORIGINS.
+        allowedOrigins: '',
+      },
       hsts: {
         // One year, the floor the preload list requires, clamped to 0…2 years.
         // Zero is not "off": it is the documented way back off HSTS, since a

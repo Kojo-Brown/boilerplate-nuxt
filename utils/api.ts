@@ -1,5 +1,8 @@
 import type { ResolvedFetchOptions } from 'ofetch'
 
+import { browserCsrfSource, resolveCsrfToken } from './csrf'
+import { CSRF_HEADER_NAME, isStateChangingMethod } from '~/types/csrf'
+
 interface RequestMeta {
   correlationId: string
   startTime: number
@@ -16,7 +19,12 @@ export function createApiClient(baseOptions: Record<string, unknown> = {}) {
     baseURL: '/api',
     ...baseOptions,
 
-    onRequest({ options }) {
+    // Async because of the CSRF header below, and everything before the first
+    // `await` still runs synchronously — which is why the correlation id and
+    // `_meta` are set first. ofetch awaits this interceptor before it sends, and
+    // `headers` is the same object `options.headers` already points at, so a
+    // value set after the await is still on the request.
+    async onRequest({ options }) {
       const correlationId = crypto.randomUUID()
       const headers = new Headers(options.headers)
       headers.set('x-correlation-id', correlationId)
@@ -26,6 +34,17 @@ export function createApiClient(baseOptions: Record<string, unknown> = {}) {
         correlationId,
         startTime: Date.now(),
       }
+
+      // The CSRF header, for everything that goes through this client — which
+      // is `useApi()` and the HTTP todo gateway, so most of the app's writes.
+      // Only on the methods `server/middleware/20.csrf.ts` actually checks: a
+      // `GET` that fetched a token first would turn every read into two
+      // requests for a header the server ignores. See `utils/csrf.ts` for why
+      // this is not an interceptor installed on the global `$fetch`.
+      if (!isStateChangingMethod(options.method)) return
+
+      const token = await resolveCsrfToken(browserCsrfSource())
+      if (token !== null) headers.set(CSRF_HEADER_NAME, token)
     },
 
     onResponse({ request, response, options }) {

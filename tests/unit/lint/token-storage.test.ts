@@ -31,6 +31,22 @@ import { describe, it, expect } from 'vitest'
  * handshake ticket (`server/api/ws/ticket.post.ts`), and `useWsChannel` keeps it
  * in a local variable for the few seconds it is valid. If that ever changes,
  * this test is where it will be noticed.
+ *
+ * ## The CSRF cookie is the deliberate exception, and is not a credential
+ *
+ * `server/middleware/20.csrf.ts` writes a cookie that is *not* `httpOnly`, and
+ * `utils/csrf.ts` reads it back out of `document.cookie`. That is the mechanism
+ * working, not a leak: the whole point of a double-submit token is that a script
+ * on this origin can read it and echo it in a header, which is exactly what a
+ * cross-origin script cannot do. A token that nobody could read would be a token
+ * nobody could submit.
+ *
+ * It is also not a credential. On its own it authenticates nothing and
+ * authorises nothing — only the *pair* of that value and this origin's session
+ * cookie does anything, and the session cookie stays `httpOnly`. So the rule
+ * below is unchanged and the CSRF code passes it on its merits: the only line in
+ * `utils/csrf.ts` that touches the cookie jar reads it, and neither the line nor
+ * the value is credential-shaped.
  */
 
 /** Directories whose files are compiled into the client bundle. */
@@ -97,16 +113,37 @@ async function clientSources(): Promise<string[]> {
   return found.sort()
 }
 
-/** Every line that touches web storage, with its file and line number. */
+/**
+ * Blanks every comment while keeping the file's line numbering intact.
+ *
+ * Prose is not a write. A module that *documents* what it does with
+ * `document.cookie` — `utils/csrf.ts` does, at length — was being reported as
+ * doing it, which turns the scan into something you route around with wording
+ * instead of something you route around by not storing credentials.
+ *
+ * Comment bodies are replaced with spaces rather than removed so that a hit's
+ * index still names the line it is on. The replacement does not parse strings,
+ * so a `//` inside a string literal blanks the rest of that line: that can only
+ * ever hide a hit on the same line as such a literal, which is a narrower
+ * failure than reporting every comment, and it is the reason this stays a guard
+ * rail rather than a proof (see the module note).
+ */
+function blankComments(source: string): string {
+  return source.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, (match) => match.replace(/[^\n]/g, ' '))
+}
+
+/** Every line of code — not comment — that touches web storage, with its location. */
 async function storageLines(): Promise<{ file: string; line: number; text: string }[]> {
   const files = await clientSources()
   const hits: { file: string; line: number; text: string }[] = []
 
   for (const file of files) {
     const source = await readFile(path.join(projectRoot, file), 'utf8')
-    source.split('\n').forEach((text, index) => {
-      if (STORAGE_APIS.test(text)) hits.push({ file, line: index + 1, text: text.trim() })
-    })
+    blankComments(source)
+      .split('\n')
+      .forEach((text, index) => {
+        if (STORAGE_APIS.test(text)) hits.push({ file, line: index + 1, text: text.trim() })
+      })
   }
 
   return hits
