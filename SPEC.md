@@ -843,7 +843,7 @@ still uploads.
 
 - [x] CSP with nonces via Nitro middleware, plus HSTS and security headers
 - [x] Token storage hardening: httpOnly cookies only, sealed sessions, rotation — the cookie is now the only carrier (h3's session request header was open), the resolved config is audited at boot, and the session id rotates on an app-minted `sid` because h3's own cannot be rotated (PR #44)
-- [ ] CSRF protection on all state-changing server routes
+- [x] CSRF protection on all state-changing server routes — `Sec-Fetch-Site`/`Origin` plus a signed double-submit token under a `__Host-` cookie, enforced on every state-changing request and every path by `server/middleware/20.csrf.ts`; `/api/vitals` and nuxt-auth-utils' `/api/_auth/session` are origin-only with reasons (PR #46)
 - [ ] Rate limiting in Nitro middleware backed by storage
 - [ ] OWASP Top 10 checklist with a test per mitigation
 - [ ] WCAG 2.2 AA audit with axe in CI, zero-violation gate
