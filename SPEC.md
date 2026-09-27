@@ -844,7 +844,7 @@ still uploads.
 - [x] CSP with nonces via Nitro middleware, plus HSTS and security headers
 - [x] Token storage hardening: httpOnly cookies only, sealed sessions, rotation — the cookie is now the only carrier (h3's session request header was open), the resolved config is audited at boot, and the session id rotates on an app-minted `sid` because h3's own cannot be rotated (PR #44)
 - [x] CSRF protection on all state-changing server routes — `Sec-Fetch-Site`/`Origin` plus a signed double-submit token under a `__Host-` cookie, enforced on every state-changing request and every path by `server/middleware/20.csrf.ts`; `/api/vitals` and nuxt-auth-utils' `/api/_auth/session` are origin-only with reasons (PR #46)
-- [ ] Rate limiting in Nitro middleware backed by storage
+- [x] Rate limiting in Nitro middleware backed by storage — GCRA (one stored timestamp per bucket) rather than a fixed-window counter, which would have let a 5-per-5-minutes login limit admit 10 attempts back to back across a window boundary; `Retry-After` is exact rather than a guess as a result. Keyed by the matched rule plus the caller — user id when there is a session, address when not — and `x-forwarded-for` is counted from the _right_ by a configured hop count, because h3's own `getRequestIP({ xForwardedFor: true })` takes the leftmost, client-controlled entry and keying on it would let any caller mint fresh buckets from one header. New `rate-limit` storage base; fails open on an unreachable store (PR #47)
 - [ ] OWASP Top 10 checklist with a test per mitigation
 - [ ] WCAG 2.2 AA audit with axe in CI, zero-violation gate
 - [ ] Focus management and route-change announcements for SPA navigation
