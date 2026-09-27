@@ -10,6 +10,7 @@ here are numbered:
 | `server/middleware/00.request-context.ts` | 1st  | Resolves a request id, stamps the arrival time, echoes `x-request-id`      |
 | `server/middleware/10.auth.ts`            | 2nd  | Resolves the session into `event.context.auth`, enforces the access policy |
 | `server/middleware/20.csrf.ts`            | 3rd  | Refuses a state-changing request that cannot show it came from this origin |
+| `server/middleware/30.rate-limit.ts`      | 4th  | Refuses a caller who is asking too often                                   |
 
 Rename `00.request-context.ts` to `request-context.ts` and it sorts _after_
 `10.auth.ts`, which would leave the 401 thrown in the auth middleware with no
@@ -22,6 +23,16 @@ they do not need would be a worse answer to a worse question. It costs nothing,
 because the gate reads no session of its own. See
 [docs/csrf.md](./csrf.md).
 
+The rate limiter runs last, and both halves of that are deliberate. It is _after_
+auth because that is what makes a per-user quota possible at all —
+`event.context.auth` does not exist until `10.auth.ts` has resolved it — and
+_after_ CSRF because that gate is two header reads and its answer is more
+specific: a forged request should be told it was forged, not that it was too
+frequent. The cost of running after auth is that a flood still pays for session
+unsealing before being refused, which is why that limiter is an application
+control and not a DoS defence. See
+[docs/rate-limiting.md](./rate-limiting.md).
+
 Security response headers are the one piece of request-scoped work that is
 deliberately **not** here. Nitro serves `public/` and every prerendered page from
 a handler matched before this chain, so a header set in `server/middleware/`
@@ -30,8 +41,8 @@ never reaches them; they are applied from Nitro's `request` hook instead, in
 [docs/security-headers.md](./security-headers.md).
 
 Middleware that returns `undefined` does not handle the request — it falls
-through to the next one and eventually to the route. Neither file here returns a
-value except by throwing, so they are context setup and a gate, nothing else.
+through to the next one and eventually to the route. No file here returns a value
+except by throwing, so they are context setup and three gates, nothing else.
 
 ## Why the gate is here and not in the page middleware
 

@@ -2,21 +2,23 @@
 
 Nitro gives every server process one `unstorage` instance, reachable from server
 code as `useStorage()`, with named **bases** mounted onto it. This app cares
-about three:
+about four:
 
 | Base          | Written by                                                                                                      | Backed by                                    |
 | ------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
 | `cache`       | Nitro itself — `swr` / `isr` route rules and `defineCachedEventHandler` — plus the tag index in `cache-tags.ts` | Redis when configured, per-process otherwise |
 | `sessions`    | This app — `server/utils/session-store.ts`                                                                      | Redis when configured, per-process otherwise |
 | `idempotency` | This app — `server/utils/idempotency.ts`, see `docs/idempotency.md`                                             | Redis when configured, per-process otherwise |
+| `rate-limit`  | This app — `server/utils/rate-limit.ts`, see `docs/rate-limiting.md`                                            | Redis when configured, per-process otherwise |
 
-`idempotency` is a base of its own rather than a prefix on `cache` because the
-two have opposite lifecycles: a cache entry is _designed_ to be discardable, and
-an operator flushing the cache namespace to force a re-render must not also erase
-the record of which operations had already run.
+`idempotency` and `rate-limit` are bases of their own rather than prefixes on
+`cache` because the lifecycles are opposite: a cache entry is _designed_ to be
+discardable, and an operator flushing the cache namespace to force a re-render
+must not also erase the record of which operations had already run, or reset every
+login-attempt counter in the deployment.
 
-Both are mounted at **runtime** by `server/plugins/storage.ts`, from a plan that
-`server/utils/storage.ts` computes out of `runtimeConfig`.
+All four are mounted at **runtime** by `server/plugins/storage.ts`, from a plan
+that `server/utils/storage.ts` computes out of `runtimeConfig`.
 
 ## Why runtime and not `nuxt.config.ts`
 
@@ -148,6 +150,11 @@ still true.
   driver a restart forgets every `revokedAt` and a revoked cookie works again.
   The memory driver also ignores `ttl`, so records accumulate for the life of the
   process. Neither matters in dev; both are why the startup warning exists.
+- **A rate limit is per instance until the base is shared.** N per window becomes
+  N per window _per instance_, so two instances behind a load balancer mean an
+  effective login limit of 10 per 5 minutes rather than 5. This is the cost that
+  is easiest to miss, because nothing about it looks broken — see
+  [docs/rate-limiting.md](./rate-limiting.md).
 
 ## Deployment checklist
 
@@ -157,7 +164,9 @@ still true.
 3. Give the session and idempotency bases durability (`--appendonly yes`, or a
    managed Redis with persistence). Losing the cache on restart costs a few slow
    requests; losing the registry silently un-revokes every signed-out session,
-   and losing the dedupe store lets an in-flight retry execute twice.
+   and losing the dedupe store lets an in-flight retry execute twice. The
+   `rate-limit` base does not need durability — losing it forgives everyone's
+   spending, which is a moment of leniency rather than a wrong outcome.
 4. Give each deployment sharing a Redis its own `NUXT_REDIS_KEY_PREFIX`.
 5. Watch the startup log for the per-process warning. It is the one line that
    says the deployment is not configured the way it is documented.

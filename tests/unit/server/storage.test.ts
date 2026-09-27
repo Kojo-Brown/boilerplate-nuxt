@@ -4,6 +4,7 @@ import { DEFAULT_RETENTION_SECONDS, MIN_RETENTION_SECONDS } from '~/server/utils
 import {
   CACHE_BASE,
   IDEMPOTENCY_BASE,
+  RATE_LIMIT_BASE,
   SESSIONS_BASE,
   assertRedisUrl,
   joinBases,
@@ -89,7 +90,12 @@ describe('resolveStorageMounts', () => {
     const plan = resolveStorageMounts(config())
 
     expect(plan.redisMounts).toEqual([])
-    expect(plan.defaultedBases).toEqual([CACHE_BASE, SESSIONS_BASE, IDEMPOTENCY_BASE])
+    expect(plan.defaultedBases).toEqual([
+      CACHE_BASE,
+      SESSIONS_BASE,
+      IDEMPOTENCY_BASE,
+      RATE_LIMIT_BASE,
+    ])
   })
 
   it('treats a whitespace-only URL as unset', () => {
@@ -105,6 +111,7 @@ describe('resolveStorageMounts', () => {
       CACHE_BASE,
       SESSIONS_BASE,
       IDEMPOTENCY_BASE,
+      RATE_LIMIT_BASE,
     ])
     expect(plan.defaultedBases).toEqual([])
   })
@@ -113,8 +120,8 @@ describe('resolveStorageMounts', () => {
     const plan = resolveStorageMounts(config({ redis: { url: REDIS_URL } }))
     const prefixes = plan.redisMounts.map((mount) => mount.options.base)
 
-    expect(prefixes).toEqual(['nuxt:cache', 'nuxt:sessions', 'nuxt:idempotency'])
-    expect(new Set(prefixes).size).toBe(3)
+    expect(prefixes).toEqual(['nuxt:cache', 'nuxt:sessions', 'nuxt:idempotency', 'nuxt:rate-limit'])
+    expect(new Set(prefixes).size).toBe(4)
   })
 
   it('honours a configured key prefix, so two apps can share one Redis', () => {
@@ -124,6 +131,7 @@ describe('resolveStorageMounts', () => {
       'staging:cache',
       'staging:sessions',
       'staging:idempotency',
+      'staging:rate-limit',
     ])
   })
 
@@ -177,6 +185,17 @@ describe('resolveStorageMounts', () => {
     const idempotency = plan.redisMounts.find((mount) => mount.base === IDEMPOTENCY_BASE)
 
     expect(idempotency?.options.ttl).toBe(MIN_RETENTION_SECONDS)
+  })
+
+  it('gives the rate-limit mount no driver TTL, because each write carries its own', () => {
+    // `consumeRateLimit` sets a TTL per key from that bucket's own drain time, so
+    // a driver-level expiry would be a second and blunter clock over values that
+    // already expire precisely.
+    const plan = resolveStorageMounts(config({ redis: { url: REDIS_URL } }))
+    const rateLimit = plan.redisMounts.find((mount) => mount.base === RATE_LIMIT_BASE)
+
+    expect(rateLimit).toBeDefined()
+    expect(rateLimit?.options.ttl).toBeUndefined()
   })
 
   it('gives idempotency a bounded TTL with no idempotency config at all', () => {
@@ -239,6 +258,7 @@ describe('storageBootWarning', () => {
     expect(warning).toContain(CACHE_BASE)
     expect(warning).toContain(SESSIONS_BASE)
     expect(warning).toContain(IDEMPOTENCY_BASE)
+    expect(warning).toContain(RATE_LIMIT_BASE)
   })
 
   it.each([
@@ -246,6 +266,10 @@ describe('storageBootWarning', () => {
     [['cache'], 'cache'],
     [['cache', 'sessions'], 'cache and sessions'],
     [['cache', 'sessions', 'idempotency'], 'cache, sessions and idempotency'],
+    [
+      ['cache', 'sessions', 'idempotency', 'rate-limit'],
+      'cache, sessions, idempotency and rate-limit',
+    ],
   ])('names %j as %j', (bases, expected) => {
     expect(joinBases(bases)).toBe(expected)
   })
@@ -255,6 +279,6 @@ describe('storageBootWarning', () => {
     // about this, and `a and b and c` reads like two separate claims.
     const warning = storageBootWarning(resolveStorageMounts(config()), false)
 
-    expect(warning).toContain('cache, sessions and idempotency')
+    expect(warning).toContain('cache, sessions, idempotency and rate-limit')
   })
 })
