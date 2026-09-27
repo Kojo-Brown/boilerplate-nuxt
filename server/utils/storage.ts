@@ -27,6 +27,10 @@ import {
  *   *designed* to be discardable, and an operator flushing the cache namespace
  *   to force a re-render would, on a shared base, also erase the record of which
  *   payments had already been taken.
+ * - **`rate-limit`** is ours, and holds one timestamp per caller per policy —
+ *   `server/utils/rate-limit.ts`. A fourth base for the same reason as the third:
+ *   flushing the cache to force a re-render must not also reset every login
+ *   attempt counter in the deployment.
  *
  * ## Why this is mounted at runtime and not in `nuxt.config.ts`
  *
@@ -60,8 +64,10 @@ import {
 export const CACHE_BASE = 'cache'
 export const SESSIONS_BASE = 'sessions'
 export const IDEMPOTENCY_BASE = 'idempotency'
+export const RATE_LIMIT_BASE = 'rate-limit'
 
-export type StorageBase = typeof CACHE_BASE | typeof SESSIONS_BASE | typeof IDEMPOTENCY_BASE
+export type StorageBase =
+  typeof CACHE_BASE | typeof SESSIONS_BASE | typeof IDEMPOTENCY_BASE | typeof RATE_LIMIT_BASE
 
 /** Redis URL schemes `ioredis` understands. `rediss:` is TLS. */
 const REDIS_PROTOCOLS = new Set(['redis:', 'rediss:'])
@@ -170,7 +176,10 @@ export function resolveStorageMounts(config: StorageRuntimeConfig): StorageMount
   const url = config.redis?.url?.trim() ?? ''
 
   if (url === '') {
-    return { redisMounts: [], defaultedBases: [CACHE_BASE, SESSIONS_BASE, IDEMPOTENCY_BASE] }
+    return {
+      redisMounts: [],
+      defaultedBases: [CACHE_BASE, SESSIONS_BASE, IDEMPOTENCY_BASE, RATE_LIMIT_BASE],
+    }
   }
 
   assertRedisUrl(url)
@@ -209,6 +218,12 @@ export function resolveStorageMounts(config: StorageRuntimeConfig): StorageMount
         base: IDEMPOTENCY_BASE,
         options: { url, base: `${prefix}:${IDEMPOTENCY_BASE}`, ttl: idempotencyTtl },
       },
+      // No default TTL: every write to this base carries its own, computed from
+      // the bucket's drain time by `consumeRateLimit`, so a driver-level expiry
+      // would be a second and blunter clock over values that already expire
+      // precisely. A key whose TTL is somehow lost is still harmless — a stored
+      // timestamp in the past reads as a drained bucket.
+      { base: RATE_LIMIT_BASE, options: { url, base: `${prefix}:${RATE_LIMIT_BASE}` } },
     ],
     defaultedBases: [],
   }
@@ -242,8 +257,9 @@ export function storageBootWarning(plan: StorageMountPlan, dev: boolean): string
   return (
     `Nitro storage: ${joinBases(plan.defaultedBases)} are on the built-in per-process ` +
     'driver because NUXT_REDIS_URL is unset. Route-rule caches and session revocation ' +
-    'will not be shared between instances, and an Idempotency-Key deduplicates only ' +
+    'will not be shared between instances, an Idempotency-Key deduplicates only ' +
     'against the instance that handled the first attempt — which is not deduplication ' +
-    'at all behind a load balancer. See docs/nitro-storage.md.'
+    'at all behind a load balancer — and a rate limit of N per window becomes N per ' +
+    'window per instance. See docs/nitro-storage.md.'
   )
 }

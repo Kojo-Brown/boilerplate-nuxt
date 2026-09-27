@@ -188,6 +188,28 @@ export default defineNuxtConfig({
         publishTimeoutMs: 5_000,
       },
     },
+    rateLimit: {
+      // Off switch. The limits themselves are code, not configuration — see the
+      // note in server/utils/rate-limit-policy.ts on why a judgement about what
+      // an endpoint costs belongs next to its reason. This is the one dial that
+      // is a property of a deployment rather than of a route, plus the hop count
+      // below. NUXT_RATE_LIMIT_ENABLED=false.
+      enabled: true,
+      // How many proxies sit in front of this app, which decides how the caller's
+      // address is read from `x-forwarded-for`. Clamped to 0…8.
+      //
+      // 0 (the default) ignores the header and uses the socket's peer address:
+      // the only value that cannot be spoofed, and the only safe default. Behind
+      // a load balancer it is also too strict — every caller shares the
+      // balancer's bucket — so a built server warns once when it is left unset.
+      // Set it to 1 behind one balancer, 2 behind a CDN in front of one.
+      //
+      // A count rather than a boolean because proxies *append* to the header, so
+      // the trustworthy entries are the rightmost ones and the leftmost is
+      // whatever the client claimed. See server/utils/rate-limit.ts.
+      // NUXT_RATE_LIMIT_TRUST_PROXY_HOPS.
+      trustProxyHops: 0,
+    },
     vitals: {
       // Where `/api/vitals` forwards each batch of Core Web Vitals — an
       // analytics collector, a log shipper, whatever owns the durable copy.

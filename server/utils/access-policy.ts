@@ -1,3 +1,5 @@
+import { matchRouteTable } from '~/server/utils/route-pattern'
+
 /**
  * The server-side access policy — which request paths need a session.
  *
@@ -46,6 +48,11 @@
  * most specific key wins — longest matched prefix, with an exact key beating a
  * wildcard of the same length. That mirrors the rou3 semantics Nitro applies to
  * `routeRules`, so the two tables can be read the same way.
+ *
+ * The matcher itself is `server/utils/route-pattern.ts`, shared with
+ * `server/utils/rate-limit-policy.ts`. Both tables are security boundaries that
+ * depend on the most specific rule winning, so they resolve through one
+ * implementation rather than two that have to be kept in step.
  */
 export type RouteAccess = 'public' | 'authenticated' | 'unmanaged'
 
@@ -108,37 +115,6 @@ export const serverAccessRules: Readonly<Record<string, RouteAccess>> = {
   '/api/rendering/**': 'public',
 } as const
 
-interface CompiledRule {
-  /** The literal prefix a path must match. */
-  readonly prefix: string
-  /** Exact-path key, or a `/**` wildcard. */
-  readonly exact: boolean
-  readonly access: RouteAccess
-}
-
-function compile(pattern: string): CompiledRule {
-  if (pattern.endsWith('/**')) {
-    // `/**` (the catch-all) compiles to an empty prefix, which matches anything.
-    return { prefix: pattern.slice(0, -3), exact: false, access: 'unmanaged' }
-  }
-  return { prefix: pattern, exact: true, access: 'unmanaged' }
-}
-
-function matches(rule: CompiledRule, pathname: string): boolean {
-  if (rule.exact) return pathname === rule.prefix
-  if (rule.prefix === '') return true
-  return pathname === rule.prefix || pathname.startsWith(`${rule.prefix}/`)
-}
-
-/**
- * Scores a matching rule. Longer literal prefixes win; on a tie an exact key
- * beats a wildcard, so `/api/metrics` can be carved out of `/api/**` without
- * reordering the table.
- */
-function specificity(rule: CompiledRule): number {
-  return rule.prefix.length * 2 + (rule.exact ? 1 : 0)
-}
-
 /**
  * Resolves the access requirement for an already-normalised pathname (see
  * {@link normalisePathname}). An unmatched path is `unmanaged` — but the table
@@ -148,17 +124,7 @@ export function resolveAccess(
   pathname: string,
   rules: Readonly<Record<string, RouteAccess>> = serverAccessRules,
 ): RouteAccess {
-  let best: CompiledRule | undefined
-
-  for (const [pattern, access] of Object.entries(rules)) {
-    const rule = { ...compile(pattern), access }
-    if (!matches(rule, pathname)) continue
-    if (best === undefined || specificity(rule) > specificity(best)) {
-      best = rule
-    }
-  }
-
-  return best?.access ?? 'unmanaged'
+  return matchRouteTable(pathname, rules)?.value ?? 'unmanaged'
 }
 
 /**
