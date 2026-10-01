@@ -164,7 +164,9 @@ function resetRows(): void {
 
         <div class="mt-4 grid gap-3 sm:grid-cols-2">
           <div class="rounded-lg border border-red-500/40 bg-[var(--color-background)] p-4">
-            <p class="text-xs font-semibold tracking-wide text-red-500 uppercase">Broken</p>
+            <p class="text-xs font-semibold tracking-wide text-[var(--color-danger)] uppercase">
+              Broken
+            </p>
             <code class="mt-1 block text-xs text-[var(--color-muted-foreground)]">
               const { count } = state
             </code>
@@ -182,7 +184,9 @@ function resetRows(): void {
           </div>
 
           <div class="rounded-lg border border-green-500/40 bg-[var(--color-background)] p-4">
-            <p class="text-xs font-semibold tracking-wide text-green-600 uppercase">Fixed</p>
+            <p class="text-xs font-semibold tracking-wide text-[var(--color-success)] uppercase">
+              Fixed
+            </p>
             <code class="mt-1 block text-xs text-[var(--color-muted-foreground)]">
               const { count } = toRefs(state)
             </code>
@@ -206,7 +210,7 @@ function resetRows(): void {
 
         <div class="mt-3 flex gap-2">
           <button
-            class="rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:ring-2 focus:ring-[var(--color-primary)] focus:outline-none"
+            class="rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90 focus:ring-2 focus:ring-[var(--color-primary)] focus:outline-none"
             @click="increment"
           >
             state.count++
@@ -233,7 +237,7 @@ function resetRows(): void {
 
         <div class="mt-4 grid gap-3 sm:grid-cols-2">
           <div class="rounded-lg border border-red-500/40 bg-[var(--color-background)] p-4">
-            <p class="text-xs font-semibold tracking-wide text-red-500 uppercase">
+            <p class="text-xs font-semibold tracking-wide text-[var(--color-danger)] uppercase">
               toRefs(filters)
             </p>
             <dl class="mt-3 space-y-0.5 text-xs text-[var(--color-muted-foreground)]">
@@ -249,7 +253,7 @@ function resetRows(): void {
           </div>
 
           <div class="rounded-lg border border-green-500/40 bg-[var(--color-background)] p-4">
-            <p class="text-xs font-semibold tracking-wide text-green-600 uppercase">
+            <p class="text-xs font-semibold tracking-wide text-[var(--color-success)] uppercase">
               toRef(filters, 'page')
             </p>
             <dl class="mt-3 space-y-0.5 text-xs text-[var(--color-muted-foreground)]">
@@ -271,7 +275,7 @@ function resetRows(): void {
 
         <div class="mt-3 flex gap-2">
           <button
-            class="rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:ring-2 focus:ring-[var(--color-primary)] focus:outline-none"
+            class="rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90 focus:ring-2 focus:ring-[var(--color-primary)] focus:outline-none"
             @click="addPageKey"
           >
             filters.page++
@@ -343,7 +347,7 @@ function resetRows(): void {
 
         <div class="mt-3 flex flex-wrap gap-2">
           <button
-            class="rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 focus:ring-2 focus:ring-[var(--color-primary)] focus:outline-none"
+            class="rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-90 focus:ring-2 focus:ring-[var(--color-primary)] focus:outline-none"
             @click="bumpBoth"
           >
             rows[0].score++ on both

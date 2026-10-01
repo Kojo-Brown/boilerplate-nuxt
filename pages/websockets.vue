@@ -223,7 +223,10 @@ async function runProbe(probe: Probe): Promise<void> {
           <dd>{{ new Date(identity.sessionExpiresAt).toLocaleString() }}</dd>
         </dl>
 
-        <p v-if="error" class="mt-4 rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-500">
+        <p
+          v-if="error"
+          class="mt-4 rounded-md bg-red-500/10 px-3 py-2 text-xs text-[var(--color-danger)]"
+        >
           {{ error }}
         </p>
 

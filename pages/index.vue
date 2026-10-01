@@ -165,10 +165,16 @@ const { isDark, preference: colorPreference } = useAppColorMode()
           </div>
 
           <div>
-            <label class="mb-1 block font-medium text-[var(--color-foreground)]">
+            <!-- `for`/`id`, not `aria-label`: the label is already on screen, so
+                 associating it is both the fix and one less string to keep in sync. -->
+            <label
+              for="preferences-page-size"
+              class="mb-1 block font-medium text-[var(--color-foreground)]"
+            >
               {{ t('preferences.pageSize') }}
             </label>
             <select
+              id="preferences-page-size"
               class="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs text-[var(--color-foreground)]"
               :value="preferences.pageSize"
               @change="preferences.setPageSize(Number(($event.target as HTMLSelectElement).value))"

@@ -106,7 +106,7 @@ if (import.meta.dev) {
           <div
             class="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-muted)] p-5"
           >
-            <p v-if="error" class="text-sm text-red-600">
+            <p v-if="error" class="text-sm text-[var(--color-danger)]">
               The index island failed to render: {{ (error as Error).message }}
             </p>
             <p v-else class="text-sm text-[var(--color-muted-foreground)]">Loading the index…</p>
@@ -149,7 +149,7 @@ if (import.meta.dev) {
 
         <NuxtIsland name="ContentSection" :props="selectedProps">
           <template #fallback="{ error }">
-            <p class="text-sm text-red-600">
+            <p class="text-sm text-[var(--color-danger)]">
               No island for those props: {{ (error as Error)?.message ?? 'unknown error' }}
             </p>
           </template>
@@ -195,7 +195,9 @@ if (import.meta.dev) {
               :key="`${issue.kind}:${issue.path}`"
               class="text-xs text-[var(--color-muted-foreground)]"
             >
-              <span class="font-mono font-semibold text-red-600">{{ issue.kind }}</span>
+              <span class="font-mono font-semibold text-[var(--color-danger)]">{{
+                issue.kind
+              }}</span>
               <span class="font-mono"> {{ issue.path || '(props)' }}</span> — {{ issue.detail }}
             </li>
           </ul>

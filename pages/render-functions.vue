@@ -148,7 +148,7 @@ const InvoiceSection = DataTableSection<Invoice>
 
 const STATUS_CLASSES: Record<Invoice['status'], string> = {
   draft: 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)]',
-  sent: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+  sent: 'bg-amber-500/15 text-[var(--color-warning)]',
   paid: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
 }
 

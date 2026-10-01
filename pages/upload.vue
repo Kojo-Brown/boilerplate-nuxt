@@ -67,7 +67,7 @@ function formatBytes(bytes: number): string {
       />
 
       <p class="text-gray-500 dark:text-gray-400">Drag & drop a file here, or click to select</p>
-      <p class="mt-1 text-xs text-gray-400">
+      <p class="mt-1 text-xs text-[var(--color-muted-foreground)]">
         Supported: JPEG, PNG, GIF, WebP, PDF, TXT, CSV — max 10 MB
       </p>
     </div>
@@ -87,7 +87,7 @@ function formatBytes(bytes: number): string {
     </div>
 
     <!-- Error -->
-    <p v-if="state.error" class="text-sm text-red-600 dark:text-red-400">
+    <p v-if="state.error" class="text-sm text-[var(--color-danger)]">
       {{ state.error }}
     </p>
 
@@ -121,7 +121,9 @@ function formatBytes(bytes: number): string {
           class="flex items-center justify-between rounded-lg bg-gray-50 p-3 text-sm dark:bg-gray-800"
         >
           <span class="max-w-xs truncate font-mono">{{ upload.filename }}</span>
-          <span class="ml-4 shrink-0 text-gray-400">{{ formatBytes(upload.size) }}</span>
+          <span class="ml-4 shrink-0 text-[var(--color-muted-foreground)]">{{
+            formatBytes(upload.size)
+          }}</span>
         </li>
       </ul>
     </section>

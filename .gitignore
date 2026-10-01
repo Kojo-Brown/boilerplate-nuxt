@@ -7,6 +7,9 @@ dist
 coverage
 playwright-report
 test-results
+# The signed-in session the WCAG audit's setup project writes for its
+# dependent projects (playwright.a11y.config.ts).
+.playwright
 .env
 .env.local
 *.log

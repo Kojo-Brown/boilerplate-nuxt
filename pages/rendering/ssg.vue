@@ -107,7 +107,7 @@ definePageMeta({
         <h2 class="mb-3 font-semibold text-[var(--color-foreground)]">Trade-offs</h2>
         <div class="grid gap-4 text-sm sm:grid-cols-2">
           <div>
-            <p class="mb-2 font-medium text-green-600 dark:text-green-400">Pros</p>
+            <p class="mb-2 font-medium text-[var(--color-success)]">Pros</p>
             <ul class="space-y-1 text-[var(--color-muted-foreground)]">
               <li>› Zero server compute per request</li>
               <li>› Instant CDN delivery</li>
@@ -116,7 +116,7 @@ definePageMeta({
             </ul>
           </div>
           <div>
-            <p class="mb-2 font-medium text-red-600 dark:text-red-400">Cons</p>
+            <p class="mb-2 font-medium text-[var(--color-danger)]">Cons</p>
             <ul class="space-y-1 text-[var(--color-muted-foreground)]">
               <li>› Content frozen at build time</li>
               <li>› Requires full rebuild to update</li>

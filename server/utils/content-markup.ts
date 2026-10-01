@@ -21,7 +21,7 @@
  * | ----------------------- | -------------------------- |
  * | `### Heading`           | `<h3>`                     |
  * | `- item` (consecutive)  | `<ul><li>`                 |
- * | ` ``` ` fenced block    | `<pre><code>`              |
+ * | ` ``` ` fenced block    | `<pre tabindex="0"><code>` |
  * | anything else           | `<p>`, lines joined by a space |
  *
  * Inline, outside code spans: `` `code` ``, `**bold**`, and `[label](url)`.
@@ -203,7 +203,15 @@ export function renderContentMarkup(source: string): string {
         case 'code':
           // No inline patterns inside a code block: a sample that contains a
           // back-tick or an asterisk has to survive being displayed.
-          return `<pre><code>${escapeHtml(block.lines.join('\n'))}</code></pre>`
+          //
+          // `tabindex="0"` because the rendered `<pre>` scrolls horizontally
+          // (`ContentSection.vue` sets `overflow-x: auto` on it, and the samples
+          // here are wider than the column). A scrollable box that nothing can
+          // focus can only be read with a pointer, which is SC 2.1.1, and axe
+          // reports it as `scrollable-region-focusable`. Focusable is the whole
+          // fix: a `<pre>` in the tab order is scrolled with the arrow keys by
+          // the browser, with no handler of ours.
+          return `<pre tabindex="0"><code>${escapeHtml(block.lines.join('\n'))}</code></pre>`
         case 'paragraph':
           return `<p>${renderInline(escapeHtml(block.lines.join(' ')))}</p>`
       }
