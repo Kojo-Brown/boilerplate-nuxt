@@ -13,6 +13,20 @@ const PUBLIC_PATHS = new Set([
   '/route-rules',
   '/route-rules/static',
   '/islands',
+  // `/rendering/isr` carries `swr: 60`, and a cached route is served to every
+  // caller from one render. Nitro runs that render through its cache layer rather
+  // than through the request, so the SSR pass has no session to read and the
+  // server-side gate answered it with a redirect to /login — which the cache then
+  // held for sixty seconds. The page was unreachable for *everyone*, signed in
+  // included: the redirect landed on /login, and /login bounces a signed-in
+  // visitor to /, so the symptom was "this demo silently goes to the dashboard".
+  //
+  // Found by the WCAG audit, which asserts it landed on the path it asked for
+  // (tests/e2e/a11y.test.ts). Public is the fix rather than a workaround, and it
+  // is the same reasoning already written above for the prerendered route: shared
+  // bytes cannot depend on who asked for them. Dropping `swr` would also work and
+  // would delete the thing the page exists to demonstrate.
+  '/rendering/isr',
 ])
 
 // The subset of public pages that a *logged-in* user should be bounced away

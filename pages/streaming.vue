@@ -108,7 +108,7 @@ async function stream(failAtRecord: number | null) {
           </div>
         </dl>
 
-        <p v-if="error" class="mt-3 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+        <p v-if="error" class="mt-3 text-sm text-[var(--color-danger)]">{{ error }}</p>
       </div>
 
       <!-- Records -->

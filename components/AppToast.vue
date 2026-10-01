@@ -24,7 +24,7 @@ const wrapperClasses: Record<Toast['type'], string> = {
 
 const iconClasses: Record<Toast['type'], string> = {
   success: 'text-green-500',
-  error: 'text-red-500',
+  error: 'text-[var(--color-danger)]',
   warning: 'text-yellow-500',
   info: 'text-blue-500',
 }

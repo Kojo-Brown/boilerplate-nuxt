@@ -51,6 +51,11 @@ Approved build scripts are listed in `pnpm.onlyBuiltDependencies`; anything not
 listed makes `pnpm install` print an "ignored build scripts" warning, which is
 why that list exists rather than being left to the default.
 
+The accessibility gate (`pnpm test:a11y`) is the one job without a Node matrix:
+it measures the markup and computed styles a browser produces, which the Node
+version that built them does not change. See
+[**docs/accessibility.md**](./docs/accessibility.md).
+
 ## Composable Lifetimes
 
 Effects — `watch`, `watchEffect`, `computed` — belong to whatever scope is
@@ -551,6 +556,35 @@ another host; a plain double-submit has neither property. And **the cookie is
 issued on document responses only**, because a `Set-Cookie` on a prerendered
 page, an `swr` response or a `/_nuxt/` asset would hand one visitor's token to
 everyone the cache serves next — everything else asks `GET /api/auth/csrf`.
+
+## Accessibility: the WCAG 2.2 AA gate
+
+`pnpm test:a11y` builds the app, serves the build, and runs axe-core over every
+page in both colour schemes. Zero violations, or CI fails.
+
+[**docs/accessibility.md**](./docs/accessibility.md) is the guide; `a11y.config.ts`
+is the audit as data and `tests/e2e/a11y.test.ts` is the gate.
+
+```sh
+pnpm test:a11y
+# 54 audits (24 routes x 2 palettes, plus the modal, a toast and /fr/) — 0 violations
+```
+
+Three things the guide is there to get right. **"WCAG 2.2 AA" is five axe tags,
+not one** — WCAG is cumulative, and `wcag22aa` alone selects exactly one of the
+seventy rules, which is how you get a green gate that checked almost nothing.
+**The audit proves it ran**, per page and from inside the browser: every rule in
+the set has to report _something_, and `target-size` — the only rule axe
+implements for a criterion 2.2 added at AA, and one it ships disabled — has to
+appear by name, because otherwise a configuration that silently stopped running
+it would pass. And **both palettes are audited**, because contrast is a property
+of a palette and `.dark` redefines every token: the dark `--color-primary` was
+`#6366f1` with white text at 4.46:1, so every primary button in dark mode was
+under AA and a light-only gate would have shipped it.
+
+There is no exemption mechanism — no `ignore` list, no `exclude` selectors — and
+`pnpm test` fails if a file in `pages/` has no entry in the route table, so a new
+page cannot be born exempt.
 
 ## Spec Progress
 

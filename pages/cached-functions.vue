@@ -137,7 +137,7 @@ async function invalidate(tags: string[]) {
           </button>
         </div>
 
-        <p v-if="error" class="mt-4 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+        <p v-if="error" class="mt-4 text-sm text-[var(--color-danger)]">{{ error }}</p>
 
         <div v-else-if="lastInvalidation" class="mt-4 text-sm">
           <p class="text-[var(--color-foreground)]">

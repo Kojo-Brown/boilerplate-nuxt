@@ -31,7 +31,7 @@ const modes = [
       'definePageMeta({ prerender: true })',
       'Also configurable via routeRules',
     ],
-    color: 'text-green-600 dark:text-green-400',
+    color: 'text-[var(--color-success)]',
     border: 'border-green-200 dark:border-green-800',
     bg: 'bg-green-50 dark:bg-green-950/30',
     badgeBg: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',

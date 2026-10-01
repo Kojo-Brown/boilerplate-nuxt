@@ -209,8 +209,11 @@ async function triggerDedupe() {
 
         <!-- Pagination controls -->
         <div class="mb-4 flex items-center gap-3">
-          <label class="text-xs text-[var(--color-muted-foreground)]">Page size</label>
+          <label for="posts-page-size" class="text-xs text-[var(--color-muted-foreground)]">
+            Page size
+          </label>
           <select
+            id="posts-page-size"
             class="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs text-[var(--color-foreground)]"
             :value="limit"
             @change="onPageSizeChange"

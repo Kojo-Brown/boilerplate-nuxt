@@ -131,6 +131,69 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  a11y:
+    name: WCAG 2.2 AA (axe)
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    # No Node matrix. The other gates run on both supported majors because they
+    # are about this project's code under a runtime; this one measures the markup
+    # and the computed styles a browser produces, which the Node version that
+    # built them does not change. A second leg would double a four-minute job to
+    # re-measure the same document.
+    timeout-minutes: 20
+    env:
+      # The built server refuses to boot without one — that is what
+      # `server/plugins/session-hardening.ts` is for. A throwaway value for a
+      # throwaway server: it signs cookies for one audit run and is never a
+      # deployment's key, so it is written here rather than taken from the secret
+      # store, where a reader would have to wonder which it was.
+      NUXT_SESSION_PASSWORD: a11y-audit-only-session-password-not-a-secret
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --strict-peer-dependencies
+        env:
+          NODE_OPTIONS: --throw-deprecation
+
+      # `--with-deps chromium`, not the whole browser set: the audit runs one
+      # engine. axe's rules are about the document and the computed style, and the
+      # places engines differ (which directive name a CSP violation reports, say)
+      # are not what it measures.
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # `pnpm test:a11y` is `nuxt build && playwright test`, and the build is the
+      # slow half. Splitting it out means a build failure reports itself as one
+      # instead of as a Playwright `webServer` timeout.
+      - name: Build
+        run: pnpm build
+        env:
+          NODE_OPTIONS: --throw-deprecation
+
+      - name: Audit
+        run: pnpm exec playwright test --config=playwright.a11y.config.ts
+        env:
+          NODE_OPTIONS: --throw-deprecation
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: a11y-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
   build:
     name: Build (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest

@@ -27,7 +27,7 @@ describe('renderContentMarkup — escaping', () => {
 
   it('escapes a tag inside a fenced code block', () => {
     expect(renderContentMarkup('```\n<b>hi</b>\n```')).toBe(
-      '<pre><code>&lt;b&gt;hi&lt;/b&gt;</code></pre>',
+      '<pre tabindex="0"><code>&lt;b&gt;hi&lt;/b&gt;</code></pre>',
     )
   })
 
@@ -107,12 +107,14 @@ describe('renderContentMarkup — blocks', () => {
 
   it('keeps blank lines and markers inside a fenced block', () => {
     expect(renderContentMarkup('```\n- not a list\n\n**not bold**\n```')).toBe(
-      '<pre><code>- not a list\n\n**not bold**</code></pre>',
+      '<pre tabindex="0"><code>- not a list\n\n**not bold**</code></pre>',
     )
   })
 
   it('closes an unterminated fence at the end of input rather than throwing', () => {
-    expect(renderContentMarkup('```\nunclosed')).toBe('<pre><code>unclosed</code></pre>')
+    expect(renderContentMarkup('```\nunclosed')).toBe(
+      '<pre tabindex="0"><code>unclosed</code></pre>',
+    )
   })
 
   it('normalises CRLF input', () => {

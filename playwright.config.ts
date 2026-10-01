@@ -4,6 +4,10 @@ const BASE_URL = process.env['NUXT_APP_BASE_URL'] ?? 'http://localhost:3000'
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // The WCAG 2.2 AA gate is a separate suite with a separate server: it audits a
+  // production build, where this one drives `pnpm dev`. See
+  // `playwright.a11y.config.ts`, and run it with `pnpm test:a11y`.
+  testIgnore: /a11y\.(test|setup)\.ts$/,
   fullyParallel: true,
   forbidOnly: !!process.env['CI'],
   retries: process.env['CI'] ? 2 : 0,

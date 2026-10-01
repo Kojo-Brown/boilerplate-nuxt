@@ -36,7 +36,7 @@ const { items, loaded, pending, toggle, remove } = useTodoList()
         </label>
         <button
           type="button"
-          class="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
+          class="rounded px-2 py-1 text-xs font-medium text-[var(--color-danger)] hover:bg-red-500/10 disabled:opacity-50"
           :disabled="pending"
           :aria-label="`Delete ${item.title}`"
           @click="remove(item.id)"
