@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, title: 'Deferred Refs' })
 
 // ─── 1. Debounced search ─────────────────────────────────────────────────────
 // The ref is bound straight to the input. Nothing downstream knows it is

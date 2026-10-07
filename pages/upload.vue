@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { Upload } from '~/types/api'
 
+definePageMeta({ title: 'File Upload' })
+
 const { state, uploadFile, reset } = useFileUpload()
 
 // `/api/uploads` is behind an `authenticated` rule in

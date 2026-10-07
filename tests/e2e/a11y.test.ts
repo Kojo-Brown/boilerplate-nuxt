@@ -9,6 +9,7 @@ import {
   WCAG_22_AA_TAGS,
   type AuditedRoute,
 } from '../../a11y.config'
+import { MAIN_CONTENT_ID } from '../../utils/routeNavigation'
 
 /**
  * The WCAG 2.2 AA gate: zero axe violations on every page, in both palettes.
@@ -258,5 +259,168 @@ test.describe('localised routes', () => {
     await settle(page)
 
     await expectNoViolations(page, '/fr/')
+  })
+})
+
+/**
+ * SPA navigation: the two WCAG 2.2 AA criteria axe has no rule for.
+ *
+ * **SC 2.4.3 Focus Order** and **SC 4.1.3 Status Messages**. A full page load
+ * satisfies both for free — the browser resets focus to the start of the new
+ * document and a screen reader reads its title — and a client-side navigation
+ * satisfies neither, because the document never changes. Nothing in the audit
+ * above can see that: the markup of both pages is impeccable, and the defect is
+ * in what happened *between* them.
+ *
+ * So these are behavioural rather than axe assertions, and they live here rather
+ * than in `tests/e2e/` proper for one reason: this is the suite CI runs. The
+ * `playwright.config.ts` suite drives `pnpm dev` and is not yet wired into a job
+ * (see `SPEC.md`), so a focus regression put there would be caught by nobody.
+ *
+ * They are checked against `document.activeElement` inside the browser rather
+ * than with Playwright's `toBeFocused`, because the element focus lands on is
+ * `<main tabindex="-1">` — a focus target, not a control, and not something the
+ * locator API is shaped for.
+ *
+ * `/rendering` → `/rendering/ssr` is the navigation used throughout: both are
+ * ordinary SSR pages reachable from a link on the first, which is what makes the
+ * click a real client-side navigation rather than a document load.
+ */
+test.describe('SPA navigation', () => {
+  const RENDERING: AuditedRoute = {
+    path: '/rendering',
+    page: 'pages/rendering/index.vue',
+    access: 'session',
+  }
+
+  /** What `document.activeElement` is, named the way a failure should read. */
+  function activeElementId(page: Page): Promise<string> {
+    return page.evaluate(() => {
+      const active = document.activeElement
+      if (active === null) return '(none)'
+      if (active === document.body) return '(body)'
+      if (active === document.documentElement) return '(html)'
+      return active.id === '' ? `(${active.tagName.toLowerCase()}, no id)` : active.id
+    })
+  }
+
+  /** The live region's current contents. */
+  function announcement(page: Page): Promise<string> {
+    return page.locator('[role="status"][aria-live="polite"]').innerText()
+  }
+
+  test('the skip link is the first thing a Tab press reaches, and it moves focus', async ({
+    page,
+  }) => {
+    await visit(page, RENDERING)
+
+    // From the top of the document. Playwright's keyboard starts wherever focus
+    // is, which after `goto` is the body, so the first Tab is the document's
+    // first focusable element — which is what "bypass block" requires it to be.
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused()
+
+    await page.keyboard.press('Enter')
+
+    // The browser moves focus to the fragment's target because `app.vue` gives it
+    // `tabindex="-1"`. Without that attribute this press would scroll and leave
+    // focus on the link, which looks identical in a screenshot.
+    expect(await activeElementId(page)).toBe(MAIN_CONTENT_ID)
+  })
+
+  test('using the skip link does not announce a navigation', async ({ page }) => {
+    // The hash change is not a page change. Announcing here would tell the user
+    // they had arrived at the page they were already on.
+    await visit(page, RENDERING)
+
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Enter')
+    await settle(page)
+
+    expect(await announcement(page)).toBe('')
+  })
+
+  test('a client-side navigation moves focus to the top of the new page', async ({ page }) => {
+    await visit(page, RENDERING)
+
+    // Clicked with the keyboard, so the test fails the way a keyboard user would
+    // experience it: a mouse click leaves focus on the link too, but nobody
+    // notices until they press Tab.
+    const link = page.getByRole('link', { name: /SSR/ }).first()
+    await link.focus()
+    await link.press('Enter')
+
+    await page.waitForURL('/rendering/ssr')
+    await settle(page)
+
+    // Without the reset this is the clicked link — or `(body)`, once the link is
+    // unmounted — and the next Tab press resumes from wherever the old page's
+    // markup happened to put it.
+    expect(await activeElementId(page)).toBe(MAIN_CONTENT_ID)
+  })
+
+  test('a client-side navigation announces the page it arrived at', async ({ page }) => {
+    await visit(page, RENDERING)
+
+    // Nothing to announce yet: the document the browser loaded announced itself,
+    // and the live region has to already exist and be empty for the change below
+    // to be a change.
+    expect(await announcement(page)).toBe('')
+
+    await page.getByRole('link', { name: /SSR/ }).first().click()
+    await page.waitForURL('/rendering/ssr')
+    await settle(page)
+
+    // The page's own name, not the document title: that would carry the
+    // `· Nuxt 4 Boilerplate` suffix into every announcement.
+    expect(await announcement(page)).toBe('Navigated to SSR — Server-Side Rendering')
+  })
+
+  test('switching language announces the page in the new language', async ({ page }) => {
+    // A locale switch is a path change (`/rendering` → `/fr/rendering`) and so it
+    // announces, which is the behaviour wanted: every string on the page has just
+    // been replaced. It also moves focus to the top, out of the `<select>` that
+    // caused it — the one place the reset is arguably intrusive, and the trade-off
+    // is taken deliberately. See `docs/accessibility.md`.
+    //
+    // Driven through the language switcher rather than by visiting `/fr/rendering`
+    // and clicking a link, because the links on that page are hardcoded unprefixed
+    // paths: clicking one from `/fr/rendering` lands on `/rendering/ssr` and drops
+    // the locale. That is the same `PUBLIC_PATHS`-shaped i18n routing defect noted
+    // under "localised routes" above, and it is not this change's to fix.
+    //
+    // The sentence is a locale string; the title inside it is a `definePageMeta`
+    // literal, so it stays English in both locales. That is a real gap, and it is
+    // the same one the document `<title>` already has.
+    await visit(page, RENDERING)
+
+    await page.locator('#language-select').selectOption('fr')
+    await page.waitForURL('/fr/rendering')
+    await settle(page)
+
+    expect(await announcement(page)).toBe('Navigation vers Rendering Modes')
+    expect(await activeElementId(page)).toBe(MAIN_CONTENT_ID)
+  })
+
+  test('the live region is empty on first load, in the markup the server sent', async ({
+    page,
+  }) => {
+    // Asserted on the HTML rather than on the live DOM: a region that arrives with
+    // its text already in it announces nothing, so what matters is that the server
+    // rendered it empty and the client filled it afterwards.
+    const response = await page.request.get('/rendering')
+    const html = await response.text()
+
+    expect(html).toContain('role="status"')
+    expect(html).toMatch(/<p[^>]*role="status"[^>]*><\/p>/)
+  })
+
+  test('the main landmark is not in the tab sequence', async ({ page }) => {
+    // `tabindex="-1"`, not `0`. It has to be focusable for the skip link and the
+    // reset to work, and it must not become an extra stop on the way through every
+    // page.
+    await visit(page, RENDERING)
+
+    await expect(page.locator(`#${MAIN_CONTENT_ID}`)).toHaveAttribute('tabindex', '-1')
   })
 })

@@ -1,4 +1,8 @@
 {
+  "a11y": {
+    "skipToContent": "Aller au contenu principal",
+    "navigatedTo": "Navigation vers {title}"
+  },
   "common": {
     "signOut": "Se déconnecter",
     "language": "Langue",

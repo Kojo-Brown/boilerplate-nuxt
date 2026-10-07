@@ -11,7 +11,7 @@ import {
 } from 'vue'
 import type { Ref } from 'vue'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, title: 'Reactivity Pitfalls' })
 
 // Every number on this page comes from the running app, not from a caption.
 // Where a claim is about *notification* rather than about a value, it is

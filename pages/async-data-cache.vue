@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PaginatedResponse, Post } from '~/types/api'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, title: 'Async Data Caching' })
 
 // `/api/posts` is `authenticated` in server/utils/access-policy.ts, so the SSR
 // call has to carry the visitor's cookie. See the note in pages/data-patterns.vue.

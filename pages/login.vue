@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { csrfRequestInit } from '~/utils/csrf'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, title: 'Sign in' })
 
 const { t } = useI18n()
 const { fetch: refreshSession } = useUserSession()
