@@ -2,7 +2,7 @@
 import type { ServerMetrics } from '~/server/api/metrics.get'
 import type { PaginatedResponse } from '~/types/api'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, title: 'useAsyncData Patterns' })
 
 // Every endpoint this page reads sits behind an `authenticated` rule in
 // server/utils/access-policy.ts, so the fetch has to carry the session cookie.

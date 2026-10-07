@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, title: 'Dashboard' })
 
 const { t } = useI18n()
 const { user, clear } = useUserSession()

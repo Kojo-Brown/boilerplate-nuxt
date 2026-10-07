@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, isReactive, markRaw, nextTick, reactive, ref, shallowRef } from 'vue'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, title: 'Reactivity for Large Payloads' })
 
 // ─── PAYLOAD ─────────────────────────────────────────────────────────────────
 // A row shape big enough to be worth caring about: 20k of these is the point

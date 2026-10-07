@@ -586,6 +586,23 @@ There is no exemption mechanism — no `ignore` list, no `exclude` selectors —
 `pnpm test` fails if a file in `pages/` has no entry in the route table, so a new
 page cannot be born exempt.
 
+The same job also covers the two WCAG 2.2 AA criteria axe has no rule for, as
+behaviour rather than markup: **SC 2.4.3 Focus Order** and **SC 4.1.3 Status
+Messages**. A client-side navigation does none of what a page load does for free —
+focus stays on the link that was clicked and nothing is announced — so focus moves
+to `<main id="main-content">` and the new page's name goes into a polite live
+region. A hash-only or query-only change is deliberately left alone, and a page
+that focuses its own first field wins. A skip link ahead of everything else
+bypasses the fixed controls.
+
+The announcer has one hard requirement, and finding it was most of the work: a live
+region fires on a _change_ to its contents, so two pages with the same name
+announce nothing. Twelve of the twenty-four pages here declared no title and shared
+the one fallback, which made `<NuxtRouteAnnouncer />` silent between any two of them
+while looking, in the markup, exactly like a working announcer.
+`tests/unit/lint/page-titles.test.ts` now fails `pnpm test` if a page declares no
+title or if two pages share one.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).

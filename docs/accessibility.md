@@ -179,7 +179,150 @@ or whether any of this works with a screen reader. Those need a person. Start
 with: tab through each page and watch where focus goes, then read the page with
 VoiceOver or NVDA with the screen off.
 
-Two criteria are worth calling out as deliberately unmeasured here. **SC 2.4.3
-Focus Order** and **SC 4.1.3 Status Messages** are the next spec item (focus
-management and route-change announcements for SPA navigation) and axe has no rule
-for either.
+Two criteria are worth calling out as unmeasurable by axe, which has no rule for
+either: **SC 2.4.3 Focus Order** and **SC 4.1.3 Status Messages**. They are
+covered, by behaviour rather than by markup — see the next section.
+
+## SPA navigation: focus and announcements
+
+A full page load hands the user a new document. The browser resets focus to the
+start of it and a screen reader reads the new `<title>`, and neither is something
+an app has to arrange. A client-side navigation does neither, because the document
+never changes: focus stays on the link that was clicked — or falls to `<body>` if
+that link was unmounted — and nothing is announced. The page looks replaced and,
+to a keyboard or screen reader user, is not.
+
+Nothing in the axe gate above can see this. The markup of both pages is
+impeccable; the defect is in what happened _between_ them. So this half is
+asserted behaviourally, in the same CI job, under
+`test.describe('SPA navigation')` in `tests/e2e/a11y.test.ts`.
+
+| Piece                                 | What it holds                                                       |
+| ------------------------------------- | ------------------------------------------------------------------- |
+| `utils/routeNavigation.ts`            | Which navigations count, and when to stand down — as pure functions |
+| `composables/useRouteChangeA11y.ts`   | The router subscription and the `focus()` call                      |
+| `composables/useRouteAnnouncement.ts` | The live region's message                                           |
+| `components/AppRouteAnnouncer.vue`    | The live region itself                                              |
+| `components/AppSkipLink.vue`          | The bypass block (SC 2.4.1)                                         |
+| `app.vue`                             | `<main id="main-content" tabindex="-1">`, and the one call          |
+| `tests/unit/lint/page-titles.test.ts` | Every page named, and no two named the same                         |
+
+### What happens on a navigation
+
+Focus moves to `<main id="main-content">`, and the new page's name goes into a
+polite live region. `<main>` carries `tabindex="-1"` because that is what makes it
+a legal focus target at all: `element.focus()` on a non-focusable element silently
+does nothing, and a browser moves focus to the target of an in-page link only when
+that target is focusable. `-1` keeps it out of the `Tab` sequence, so the page
+gains no extra stop.
+
+It is the same target the skip link points at, deliberately — one behaviour to
+learn rather than two. The focus call passes `preventScroll: true`, because
+scrolling is the router's job and it has already done it: top of the page on a
+push, the saved position on a back or forward. Without the flag, focusing scrolls
+the element into view and undoes the restore, dropping the user at the top of a
+page they were half way down.
+
+### Three navigations that are deliberately left alone
+
+Each of these is a bug if treated as a page change, and each has a test in
+`tests/unit/utils/routeNavigation.test.ts` naming it:
+
+- **The first navigation** (hydration). The browser has already placed focus, and
+  the screen reader has already read the title it was served. Recognised by
+  `from.matched` being empty — vue-router's `START_LOCATION` — rather than by a
+  "have we navigated yet" flag, which would only be correct if these hooks were
+  registered before the first navigation, and Nuxt resolves that one during plugin
+  setup.
+- **A hash-only change.** In-page navigation: the browser moves to the fragment
+  and takes focus with it. This is also what the skip link does, so treating it as
+  a page change would announce the page the user is already on.
+- **A query-only change.** `?page=2`, `?sort=name`, `?q=…` are written by a control
+  the user is still operating. Pulling focus out of a filter box on every keystroke
+  is worse than doing nothing, and the state it changed is a status message for the
+  component that owns it to announce.
+
+So the comparison is on `path` alone. `fullPath` would make every query change a
+navigation; comparing matched route records would miss `/a` → `/b` when both
+resolve to the same component.
+
+### When the page wants focus somewhere else
+
+A page that focuses its own first field on mount — a search page, a login form, a
+composer — wins. `navigationClaimedFocus` compares what held focus when the
+navigation started against what holds it after the render: if they differ and the
+new one is still mounted, something took focus on purpose and the reset stands
+down.
+
+Comparing against the _start_ is what makes the ordinary case work. After a link
+click the clicked link still holds focus, and if it survives the navigation (a
+persistent nav, a card grid re-rendered in place) then nothing has claimed
+anything and the reset must proceed — even though there is a perfectly normal
+focused element sitting there.
+
+The reset does not have to know which of the two ran first, because both orderings
+land on the page's choice. Vue flushes the navigation's render before `nextTick`
+resolves when the page is synchronous, so the reset sees the page's element
+already focused and declines; it resolves first when the page suspends on data, so
+the reset runs and the page's own `onMounted` overwrites it.
+
+### Why the announcement is not `<NuxtRouteAnnouncer />`
+
+Nuxt ships one, and this app used it. It announces `document.title`, re-read on
+unhead's `dom:rendered` hook, and that is the wrong mechanism here on two counts.
+It is driven by the title rather than by navigation — `dom:rendered` fires on any
+head change and not at all on a navigation that leaves the head alone, so it
+cannot tell a page change from a `useSeoMeta` update, and has no way to know a
+navigation was hash-only. And it announces the whole document title, which here is
+`<page> · Nuxt 4 Boilerplate`, so every announcement would repeat the product name.
+
+It was also silent on half the app, which is the more interesting failure.
+
+### The announcer's one hard requirement: distinct titles
+
+A live region fires on a **change** to its contents. Assigning the string it
+already holds changes nothing — Vue does not re-render, the text node is not
+touched, and the screen reader says nothing. Not a mutation it ignores: no
+mutation.
+
+Twelve of this app's twenty-four pages declared no `definePageMeta({ title })`, so
+every one of them fell back to the same `titleTemplate` default. Navigating between
+any two of them announced nothing, while looking in the markup exactly like a
+working announcer. The same twelve also shared one `<title>`, which is SC 2.4.2
+failed in substance while `document-title` — axe only checks that the element is
+non-empty — reported clean on all of them.
+
+All twenty-four now name themselves, and `tests/unit/lint/page-titles.test.ts`
+fails `pnpm test` if a page declares no title or if two pages share one. That gate
+is what makes the live region reliable for every route in `pages/`, which is why
+`useRouteAnnouncement` can take the cheap single-write path and never flicker an
+empty region through a frame. It still handles a repeat — by clearing the region
+and letting a render happen before writing the same text again — because a dynamic
+route (`/orders/[id]`) would reintroduce the case and no lint rule can see it.
+
+### Known gaps
+
+- **Page titles are not translated.** `definePageMeta` is a compiler macro, so its
+  argument cannot call `t()`. The sentence around the title is a locale string
+  (`a11y.navigatedTo`) and the title inside it stays English in both locales. The
+  document `<title>` has had the same gap since it started working.
+- **A locale switch moves focus.** `/rendering` → `/fr/rendering` is a path change,
+  so it announces and resets focus — out of the `<select>` that caused it. Taken
+  deliberately: every string on the page has just been replaced, which is closer to
+  a new page than to a filter change.
+- **Focus is not restored per history entry.** Back and forward reset focus to the
+  top like any other navigation rather than returning it to the element that had it
+  when that entry was left. Doing it properly means keeping a focus position per
+  history entry, and the elements it would name do not survive the remount, so it
+  needs a selector strategy rather than a reference. `preventScroll` keeps the
+  scroll restoration intact in the meantime.
+- **`<main>` shows a focus ring in some browsers.** Chrome does not apply
+  `:focus-visible` to a programmatically focused `tabindex="-1"` element, so the
+  reset is invisible; activating the skip link is a user gesture and may paint an
+  outline around the whole content area. Nothing suppresses it, because suppressing
+  a focus indicator is how SC 2.4.7 gets failed somewhere else later.
+- **The fixed control cluster is outside any landmark.** `<main>` now wraps the
+  page, but the language switcher and colour-mode toggle sit before it in a bare
+  `<div>`. axe's `region` rule is tagged best-practice rather than WCAG, so the
+  gate above does not run it; a `<header>` around that cluster is the fix, and it
+  is a layout decision rather than this change's.

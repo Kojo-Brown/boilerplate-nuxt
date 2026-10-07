@@ -6,7 +6,7 @@ import { csrfRequestInit } from '~/utils/csrf'
 import type { ApiResponse } from '~/types/api'
 import { WS_TICKET_SUBPROTOCOL, type WsServerFrame, type WsTicketResponse } from '~/types/websocket'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, title: 'WebSockets' })
 
 // ─── The channel ─────────────────────────────────────────────────────────────
 // One composable. It fetches a ticket, opens the socket, and reconnects — a

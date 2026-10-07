@@ -53,7 +53,7 @@ interface ChannelView {
 </script>
 
 <script setup lang="ts">
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, title: 'Grouped Teardown' })
 
 const CHANNELS = ['alpha', 'beta', 'gamma'] as const
 const FILTERS = ['all', 'errors', 'warnings'] as const

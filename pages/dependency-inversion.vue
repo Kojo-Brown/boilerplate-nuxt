@@ -10,7 +10,7 @@ import {
 
 import type { TodoGateway, TodoItem } from '~/types/todos'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, title: 'Dependency Inversion' })
 
 // ─── The subtree under test ──────────────────────────────────────────────────
 // `TodoBoard`, `TodoComposer`, `TodoList` and `TodoStats` are rendered

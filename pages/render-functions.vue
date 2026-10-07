@@ -6,7 +6,7 @@ import { defineColumn } from '../utils/dataTable'
 
 import type { ColumnDef, SortState } from '~/types/table'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, title: 'Render Functions & JSX' })
 
 /**
  * The table on this page is `components/DataTable.tsx` — a render function, not
