@@ -308,6 +308,26 @@ describe('useIdleTimeout', () => {
     })
   })
 
+  describe('a tick that does not divide the warning window', () => {
+    it('still goes idle at exactly the timeout', () => {
+      // The regression the refactor step found. With a 3,000 ms tick the
+      // warning starts at 6,000 ms and a wake armed for a whole tick lands at
+      // 9,000 and then 12,000 — so idle is announced 2,000 ms late, and a
+      // session the policy says is over stays open. `planIdleStep` shortens the
+      // last wake to the time actually left.
+      const { idle, clock, onIdle } = setup({ tick: 3_000 })
+
+      clock.advance(TIMEOUT - 1)
+      expect(idle.phase.value).toBe('warning')
+      expect(onIdle).not.toHaveBeenCalled()
+
+      clock.advance(1)
+      expect(idle.phase.value).toBe('idle')
+      expect(idle.remaining.value).toBe(0)
+      expect(onIdle).toHaveBeenCalledTimes(1)
+    })
+  })
+
   describe('lifecycle', () => {
     it('attaches one listener per configured event', () => {
       const { dom } = setup()

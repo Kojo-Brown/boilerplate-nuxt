@@ -1,8 +1,12 @@
 import { computed, getCurrentScope, onScopeDispose, ref } from 'vue'
 import type { ComputedRef } from 'vue'
 
-/** Where a session is between its last activity and being idle. */
-export type IdlePhase = 'active' | 'warning' | 'idle'
+import { normalizeIdleTiming, planIdleStep } from '../utils/idleTimer'
+// `IdlePhase` is deliberately not re-exported: both directories are
+// auto-imported, so a second export of the same name makes Nuxt pick one and
+// warn about the other. Import it from `utils/idleTimer` (or let the
+// auto-import do it).
+import type { IdlePhase, IdleTimingOptions } from '../utils/idleTimer'
 
 /**
  * Arms a one-shot wake and returns the cancel for it.
@@ -27,22 +31,16 @@ export interface IdleTimeoutDeps {
   target: EventTarget | null
 }
 
-export interface IdleTimeoutOptions {
-  /** Milliseconds of inactivity before the session is idle. */
-  timeout: number
-  /**
-   * Milliseconds of inactivity before the warning phase starts. Must be
-   * below `timeout`. Omit for no warning phase at all.
-   */
-  warnAfter?: number | undefined
-  /** How often `remaining` is refreshed during the warning. Default 1,000 ms. */
-  tick?: number | undefined
-  /** Event types on `target` that count as activity. */
+export interface IdleTimeoutOptions extends IdleTimingOptions {
+  /** Event types on `target` that count as activity. Default: {@link DEFAULT_ACTIVITY_EVENTS}. */
   events?: readonly string[] | undefined
   /** Whether to watch at all. Default `!import.meta.server`. */
   enabled?: boolean | undefined
+  /** Called once when the warning phase starts. */
   onWarn?: (() => void) | undefined
+  /** Called once when the session goes idle. */
   onIdle?: (() => void) | undefined
+  /** Called once when a warned or idle session returns to active. */
   onActive?: (() => void) | undefined
 }
 
@@ -56,7 +54,7 @@ export interface IdleTimeout {
   activity: () => void
   /** Stops the countdown, keeping the listeners and the current phase. */
   pause: () => void
-  /** Restarts the countdown from now. */
+  /** Restarts the countdown from now, including from idle. */
   resume: () => void
   /** Removes the listeners and cancels the pending wake. Irreversible. */
   stop: () => void
@@ -78,7 +76,7 @@ export const DEFAULT_ACTIVITY_EVENTS = [
 ] as const
 
 /**
- * `capture` so an event stopped by a handler on the way down still counts as
+ * `capture` so an event a handler stops on the way down still counts as
  * activity, `passive` so listening on `document` cannot delay a scroll.
  */
 const LISTENER_OPTIONS = { capture: true, passive: true } as const
@@ -92,21 +90,20 @@ function documentTarget(): EventTarget | null {
   return typeof document === 'undefined' ? null : document
 }
 
-function assertDuration(value: number, name: string): void {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new TypeError(`${name} must be a finite, positive number of milliseconds`)
-  }
-}
-
 /**
  * Tracks how long it has been since the user did anything, and announces the
  * warning and the timeout as it passes them.
  *
- * The countdown is driven by a timestamp and a clock, not by a timer that is
- * cleared and re-armed on every event: activity records `lastActivity` and
- * nothing else, and the next wake re-derives the phase from the clock when it
- * fires. A page that samples `pointermove` at 120 Hz therefore costs one
- * assignment per sample instead of a `clearTimeout`/`setTimeout` pair.
+ * The countdown is a timestamp and a clock, not a timer that is cleared and
+ * re-armed on every event: `activity()` records `lastActivity` and nothing
+ * else, and the next wake re-derives the phase from the clock when it fires. A
+ * page that samples `pointermove` at 120 Hz therefore costs one assignment per
+ * sample instead of a `clearTimeout`/`setTimeout` pair, and a wake that lands
+ * earlier than the last activity deserves simply arms itself again.
+ *
+ * What it decides is in {@link planIdleStep}; this is the shell that owns the
+ * clock, the listeners and the refs. Built as the kata in
+ * [`docs/tdd-kata.md`](../docs/tdd-kata.md).
  *
  * @example
  * ```ts
@@ -116,21 +113,16 @@ function assertDuration(value: number, name: string): void {
  *   onIdle: () => signOut(),
  * })
  * ```
+ *
+ * @param deps Overrides for the ambient values in {@link IdleTimeoutDeps}. Every
+ *   field is optional and defaults to the real thing, so application code calls
+ *   `useIdleTimeout(options)` and only tests pass anything.
  */
 export function useIdleTimeout(
   options: IdleTimeoutOptions,
   deps: Partial<IdleTimeoutDeps> = {},
 ): IdleTimeout {
-  const { timeout, warnAfter, tick = 1_000 } = options
-
-  assertDuration(timeout, 'timeout')
-  assertDuration(tick, 'tick')
-  if (warnAfter !== undefined) {
-    assertDuration(warnAfter, 'warnAfter')
-    if (warnAfter >= timeout) {
-      throw new TypeError('warnAfter must be below timeout')
-    }
-  }
+  const timing = normalizeIdleTiming(options)
 
   const {
     events = DEFAULT_ACTIVITY_EVENTS,
@@ -142,7 +134,7 @@ export function useIdleTimeout(
   const { now = Date.now, schedule = timerScheduler, target = documentTarget() } = deps
 
   const phase = ref<IdlePhase>('active')
-  const remaining = ref(timeout)
+  const remaining = ref(timing.timeout)
 
   let lastActivity = now()
   let cancelWake: (() => void) | null = null
@@ -154,6 +146,7 @@ export function useIdleTimeout(
     cancelWake = null
   }
 
+  /** Transitions only: a tick that changed nothing must not re-announce it. */
   function announce(next: IdlePhase): void {
     const previous = phase.value
     phase.value = next
@@ -163,33 +156,15 @@ export function useIdleTimeout(
     else onActive?.()
   }
 
-  /** Reads the clock, moves to the phase it implies, and arms the next wake. */
+  /** Reads the clock, applies the step it implies, and arms the next wake. */
   function wake(): void {
-    const elapsed = now() - lastActivity
     cancelPendingWake()
 
-    if (elapsed >= timeout) {
-      remaining.value = 0
-      announce('idle')
-      return
-    }
+    const step = planIdleStep(now() - lastActivity, timing)
+    remaining.value = step.remaining
+    announce(step.phase)
 
-    remaining.value = timeout - elapsed
-
-    if (warnAfter === undefined) {
-      announce('active')
-      cancelWake = schedule(wake, timeout - elapsed)
-      return
-    }
-
-    if (elapsed < warnAfter) {
-      announce('active')
-      cancelWake = schedule(wake, warnAfter - elapsed)
-      return
-    }
-
-    announce('warning')
-    cancelWake = schedule(wake, tick)
+    if (step.delay !== null) cancelWake = schedule(wake, step.delay)
   }
 
   function activity(): void {
@@ -197,7 +172,8 @@ export function useIdleTimeout(
     lastActivity = now()
     // While active the armed wake is already due no later than the earliest
     // possible phase change, and `wake` re-derives from the clock, so there is
-    // nothing to recompute. While warning there is: the banner has to go now.
+    // nothing to recompute — which is what keeps a `pointermove` storm free.
+    // While warning there is: the banner has to go now, not at the next tick.
     if (phase.value !== 'active') wake()
   }
 
@@ -211,10 +187,7 @@ export function useIdleTimeout(
     if (stopped || !enabled) return
     running = true
     lastActivity = now()
-    remaining.value = timeout
-    announce('active')
-    cancelPendingWake()
-    cancelWake = schedule(wake, warnAfter ?? timeout)
+    wake()
   }
 
   function stop(): void {
@@ -232,7 +205,7 @@ export function useIdleTimeout(
       for (const type of events) target.addEventListener(type, activity, LISTENER_OPTIONS)
     }
     running = true
-    cancelWake = schedule(wake, warnAfter ?? timeout)
+    wake()
   }
 
   // Guarded like the rest of the repo's composables: outside a component or an
