@@ -603,6 +603,39 @@ while looking, in the markup, exactly like a working announcer.
 `tests/unit/lint/page-titles.test.ts` now fails `pnpm test` if a page declares no
 title or if two pages share one.
 
+## Testing: a TDD kata, written out
+
+One composable — `useIdleTimeout`, the "you will be signed out in 30 seconds"
+countdown — built red → green → refactor, one commit per step, with the
+reasoning recorded instead of thrown away.
+
+[**docs/tdd-kata.md**](./docs/tdd-kata.md) is the walkthrough;
+`composables/useIdleTimeout.ts` and `utils/idleTimer.ts` are the result, and
+`tests/unit/lint/tdd-kata.test.ts` fails `pnpm test` if the document drifts
+from either.
+
+```sh
+npx vitest run tests/unit/composables/useIdleTimeout.test.ts tests/unit/utils/idleTimer.test.ts
+# 63 passed — none of them using a real timer
+```
+
+Three things the guide is there to get right. **The design is in the test that
+rejected the easier implementation**, not in the finished code: "arms no extra
+timer per activity event" is unobservable to a user, and it is the single
+assertion that ruled out the obvious `clearTimeout`/`setTimeout`-per-event
+version, which passes every other case in the file. **The refactor step paid
+for itself with a real bug** — extracting the state machine into a pure
+`planIdleStep` made boundaries reachable without a timer, and a `tick` that did
+not divide the warning window turned out to carry the next wake _past_ the
+timeout, so `onIdle` fired up to a whole tick late and a session the policy had
+ended stayed open. And **the spec injects a clock rather than patching one**:
+`vi.useFakeTimers()` would have proved a global can be replaced, not that the
+composable has a seam.
+
+What the kata deliberately does not claim is that three commits is a session.
+It is one loop, written out; real TDD on something this size is many. The
+document says so, along with the rest of what it does not show.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).
