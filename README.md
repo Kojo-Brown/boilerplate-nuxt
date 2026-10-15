@@ -636,6 +636,51 @@ What the kata deliberately does not claim is that three commits is a session.
 It is one loop, written out; real TDD on something this size is many. The
 document says so, along with the rest of what it does not show.
 
+## Component tests, and the HTML the server sends
+
+Every `.vue` file in this repository was untested until now, and not for want of
+tests: the unit suite runs in Vitest's `node` environment with Nuxt's
+auto-imports stubbed, which is right for composables and stores and cannot mount
+a component that calls `useI18n()`.
+
+[**docs/component-testing.md**](./docs/component-testing.md) is the guide. There
+are now three suites in two configs — `pnpm test` runs all of them:
+
+```sh
+pnpm test:unit                       # node environment, no Nuxt boot
+pnpm test:nuxt --project component   # mounting, in a real Nuxt app
+pnpm test:nuxt --project ssr         # what the server actually sends
+# 50 passed across the two Nuxt suites
+```
+
+The `component` suite uses `@nuxt/test-utils`' `nuxt` environment, so the
+auto-imports, the module plugins and the component resolver are the
+application's: `@nuxtjs/color-mode` really puts `class="dark"` on `<html>` when
+the toggle is clicked, `@nuxtjs/i18n` really reads `i18n/locales/*.json` when the
+language select changes, and `registerEndpoint` answers the `$fetch` an island
+awaits in its `setup()`. `mockNuxtImport` is available and unused: a test that
+mocks the auto-imports is a node-environment test paying twenty seconds for the
+privilege.
+
+The `ssr` suite exists because that environment is a client. Whether a
+`<ClientOnly>` leaked into the server render, whether the colour-mode script
+really precedes the app markup, whether `ssr: false` really ships an empty
+shell, whether a secret from `runtimeConfig` ended up in the payload — none of
+these has a DOM-level consequence once the page has hydrated, and all of them
+are visible in the bytes. So those tests read the bytes, from a real Nuxt server.
+
+Two things had to be worked around to get there, both recorded in the guide
+because the first one gives you nothing to search for. Nuxt 4.5 hands Vitest a
+plugin Vitest cannot run — `nuxt:replace` returns a rolldown builtin, Nuxt builds
+on Vite 8, Vitest 3 runs on Vite 7 — and the entire run fails with
+`Unhandled Error: [object Object]`: no stack, no file, no test. Removing the
+plugin instead produces `TypeError: entry is not a function`, because
+`import.meta.client` then stays `undefined` and Nuxt's app entry never assigns
+the function that boots the app. And `@nuxtjs/color-mode` needs the inline script
+no DOM environment can produce, or it dies on
+`helper.getColorScheme is not a function` inside whichever test mounted
+something.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).

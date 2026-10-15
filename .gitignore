@@ -10,6 +10,9 @@ test-results
 # The signed-in session the WCAG audit's setup project writes for its
 # dependent projects (playwright.a11y.config.ts).
 .playwright
+# Written by `@nuxt/test-utils`' Nuxt module the first time the component suite
+# runs, to record the version it set itself up for. A local marker, not config.
+.nuxtrc
 .env
 .env.local
 *.log
