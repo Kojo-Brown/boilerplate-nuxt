@@ -117,8 +117,18 @@ jobs:
         env:
           NODE_OPTIONS: --throw-deprecation
 
+      # Split so that a failure names the suite it came from. `pnpm test` is
+      # these two in sequence and is what a contributor runs locally; here they
+      # are separate steps because the second boots a Nuxt app in happy-dom and
+      # a real Nuxt server, which fail for their own reasons and should not be
+      # reported as a unit test failing. See docs/component-testing.md.
       - name: Run unit tests
-        run: pnpm test
+        run: pnpm test:unit
+        env:
+          NODE_OPTIONS: --throw-deprecation
+
+      - name: Run component and SSR tests
+        run: pnpm test:nuxt
         env:
           NODE_OPTIONS: --throw-deprecation
 
