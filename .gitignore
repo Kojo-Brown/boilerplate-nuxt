@@ -20,3 +20,8 @@ test-results
 
 # macOS
 .DS_Store
+
+# Stryker's sandbox copy of the project, and the HTML mutation report.
+# `pnpm test:mutation` writes both; neither is an input to anything.
+.stryker-tmp
+reports

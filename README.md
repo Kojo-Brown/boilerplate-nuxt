@@ -681,6 +681,44 @@ no DOM environment can produce, or it dies on
 `helper.getColorScheme is not a function` inside whichever test mounted
 something.
 
+## Mutation testing: does the suite actually assert?
+
+Coverage says a line ran. It cannot say the line mattered — a test that calls
+everything and asserts `toBeDefined()` reports 100% and would not notice the
+module being rewritten. Stryker asks the other question: it edits the source one
+change at a time and re-runs the tests covering that line.
+
+[**docs/mutation-testing.md**](./docs/mutation-testing.md) is the guide.
+
+```sh
+pnpm test:mutation
+# 91.65% over 587 mutants in 8 modules — break threshold 90
+```
+
+The first green run scored 84.16%, and what it found is the reason the gate
+exists rather than the other way round. Six mutants survived inside
+`publicApiPatterns` — including one that drops every entry — because the only
+test reading it was a `for` loop over its result, so an empty list made the gate
+pass by checking nothing. That gate is what stops a `public` carve-out in the
+server's default-deny table from outliving the route it was opened for. Four
+more: `normalisePathname` never reached its decode cap, so the loop bound could
+be mutated into an unbounded one without a failure; every spoofing case in the
+rate-limit suite put its junk at the _end_ of the address, which leaves three
+`^`-anchored patterns free to lose their anchor and let a whole crafted string
+into a storage key; `checkPayloadBudget` had never seen a payload exactly at its
+budget; and four branches of the table comparator turned out to be unobservable
+with the test data, because positive bigints and conveniently-ordered weekday
+names both agree with the string fallback. Fixing those took the score to
+91.65%.
+
+What is left is mostly unkillable, and the guide says so one row at a time —
+a defensive `||` whose second operand is unreachable, a `string`/`string` fast
+path whose fallback computes the same answer, a `>` that cannot tie because two
+distinct table keys cannot have equal specificity. That last one is the
+"iteration order is irrelevant by construction" claim in `route-pattern.ts`,
+confirmed by the attempt to break it. Two rows are marked **Genuine**: those are
+the next tests to write, not a threshold to lower.
+
 ## Spec Progress
 
 See [SPEC.md](./SPEC.md).

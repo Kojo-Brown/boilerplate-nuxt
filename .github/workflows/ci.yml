@@ -141,6 +141,51 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  mutation:
+    name: Mutation score (Stryker)
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    # No Node matrix. Stryker measures this project's assertions against its own
+    # source; the runtime underneath does not change which mutants a test kills,
+    # and a second leg would spend another two minutes re-deriving the same
+    # number. `needs` the unit tests because a red suite makes every mutant look
+    # killed for the wrong reason — Stryker's own dry run would fail first, but
+    # reporting that as a mutation failure buries the real one.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # `postinstall` runs `nuxt prepare`, which writes the `.nuxt` that
+      # `stryker.config.mjs` forces into the sandbox. See docs/mutation-testing.md.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --strict-peer-dependencies
+        env:
+          NODE_OPTIONS: --throw-deprecation
+
+      # Exits non-zero below `thresholds.break`. Not `--throw-deprecation`:
+      # Stryker instruments the source it runs and the per-mutant child processes
+      # inherit the flag, so a deprecation warning from any dependency in the
+      # chain would be reported as hundreds of dead mutants rather than as one
+      # warning.
+      - name: Mutation score
+        run: pnpm test:mutation
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          retention-days: 7
+          if-no-files-found: ignore
+
   a11y:
     name: WCAG 2.2 AA (axe)
     runs-on: ubuntu-latest

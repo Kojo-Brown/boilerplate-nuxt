@@ -65,14 +65,48 @@ describe('createValueComparator', () => {
   })
 
   it('orders dates by instant, not by their string form', () => {
-    const earlier = new Date('2026-01-02T00:00:00.000Z')
-    const later = new Date('2026-01-10T00:00:00.000Z')
+    // A Thursday and the Friday after it. `String(date)` leads with the weekday
+    // name, so the fallback would rank 'Fri…' before 'Thu…' and reverse these
+    // two — which is the point: with a pair whose weekday names happen to sort
+    // chronologically, deleting the whole `instanceof Date` branch passes.
+    // Picking consecutive days keeps that true in every timezone, since a UTC
+    // midnight shifts by at most one day and the pair shifts together.
+    const earlier = new Date('2026-01-01T00:00:00.000Z')
+    const later = new Date('2026-01-02T00:00:00.000Z')
     expect(compare(earlier, later)).toBeLessThan(0)
     expect(compare(later, earlier)).toBeGreaterThan(0)
   })
 
-  it('orders bigints by value', () => {
+  it('ties two dates at the same instant', () => {
+    const instant = '2026-01-01T00:00:00.000Z'
+    expect(compare(new Date(instant), new Date(instant))).toBe(0)
+  })
+
+  it('does not compare a date against a non-date as a date', () => {
+    // `getTime()` only exists on one side here. Widening the branch to either
+    // operand being a Date would throw rather than fall back.
+    expect(() => compare(new Date('2026-01-01T00:00:00.000Z'), 'tuesday')).not.toThrow()
+    expect(() => compare('tuesday', new Date('2026-01-01T00:00:00.000Z'))).not.toThrow()
+  })
+
+  it('orders bigints by value, including below zero', () => {
     expect(compare(9n, 10n)).toBeLessThan(0)
+    // `-10n` before `-9n` is the case that proves the bigint branch is doing the
+    // work. For every positive pair the string fallback agrees with it, because
+    // the collator's `numeric: true` compares digit runs by value — so
+    // `compare(9n, 10n)` alone passes with the branch deleted. Below zero the
+    // two disagree: the collator reads past the `-` and ranks 10 above 9.
+    expect(compare(-10n, -9n)).toBeLessThan(0)
+    expect(compare(-9n, -10n)).toBeGreaterThan(0)
+    expect(compare(10n, 10n)).toBe(0)
+  })
+
+  it('does not compare a bigint against a non-bigint as a bigint', () => {
+    // `1n < 'a'` is not a type error in JavaScript — it coerces and answers
+    // `false`, so a branch widened to either operand being a bigint would call
+    // a mixed pair equal instead of falling back to the string forms.
+    expect(compare(1n, 'a')).toBeLessThan(0)
+    expect(compare('a', 1n)).toBeGreaterThan(0)
   })
 
   it('puts null and undefined first, and treats them as equal to each other', () => {
@@ -114,11 +148,17 @@ describe('defineColumn', () => {
     expect(column.text(invoice({ id: 'a', client: 'Acme' }))).toBe('Acme')
   })
 
-  it('renders nothing for a nullish value rather than the word "null"', () => {
-    const column = defineColumn<Invoice, string | null>({
+  it.each([
+    ['null', null],
+    // `undefined` separately from `null`: an absent optional field reaches
+    // `defaultFormat` as `undefined`, and dropping that half of the check costs
+    // the word "undefined" in a cell rather than a blank one.
+    ['undefined', undefined],
+  ])('renders nothing for a %s value rather than the word itself', (_label, value) => {
+    const column = defineColumn<Invoice, string | null | undefined>({
       id: 'note',
       header: 'Note',
-      value: () => null,
+      value: () => value,
     })
 
     expect(column.text(invoice({ id: 'a' }))).toBe('')
