@@ -56,6 +56,21 @@ describe('normalisePathname', () => {
     expect(normalisePathname('/api/route-rules/%25252e%25252e/todos')).toBe('/api/todos')
   })
 
+  it('stops at the pass limit instead of decoding until it runs out of input', () => {
+    // Quadruple-encoded: one round more than MAX_DECODE_PASSES, so the cap is
+    // the thing that ends the loop and the result is still half-encoded. That is
+    // the safe direction — an under-decoded path stays *more* specific than what
+    // the router resolves (see the module note), so it fails towards "this needs
+    // a session". The cap is what bounds the work an attacker can ask for by
+    // nesting escapes, and until this test existed nothing held it: both the
+    // loop counter and its comparison could be mutated without a failure,
+    // because every other input here reaches a fixed point inside the budget
+    // and returns early.
+    expect(normalisePathname('/api/route-rules/%2525252e%2525252e/todos')).toBe(
+      '/api/route-rules/%2e%2e/todos',
+    )
+  })
+
   it('decodes an encoded separator rather than treating it as a segment', () => {
     expect(normalisePathname('/api%2Ftodos')).toBe('/api/todos')
   })

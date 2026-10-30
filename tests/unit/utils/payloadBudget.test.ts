@@ -43,6 +43,13 @@ describe('formatBytes', () => {
     [0, '0 B'],
     [512, '512 B'],
     [1024, '1.00 kB'],
+    // 10 kB exactly: the point where the kB form drops from two decimals to
+    // one. Below it a third significant digit is worth printing, above it the
+    // digit before the point already carries the magnitude. Both sides are here
+    // because the comparison is `<`, and a test on one side only leaves `<=`
+    // indistinguishable from it.
+    [10_239, '10.00 kB'],
+    [10_240, '10.0 kB'],
     [20_480, '20.0 kB'],
     [1024 * 1024, '1.00 MB'],
   ])('formats %i as %s', (bytes, expected) => {
@@ -87,6 +94,16 @@ describe('checkPayloadBudget', () => {
 
     expect(report).toMatchObject({ key: 'posts', withinBudget: true, budgetBytes: 1024 })
     expect(report.bytes).toBeGreaterThan(0)
+  })
+
+  it('counts a value that is exactly its budget as fitting', () => {
+    // `{"id":"a"}` is ten bytes, so this is the boundary itself. The budget is a
+    // ceiling the payload may reach, not one it must stay under — an exact fit
+    // warning about itself would be a false alarm on every response tuned to
+    // the limit.
+    expect(measurePayloadBytes({ id: 'a' })).toBe(10)
+    expect(checkPayloadBudget('posts', { id: 'a' }, 10).withinBudget).toBe(true)
+    expect(checkPayloadBudget('posts', { id: 'a' }, 9).withinBudget).toBe(false)
   })
 
   it('does not compute a field breakdown for a value that fits', () => {
@@ -136,6 +153,14 @@ describe('payloadBudgetWarning', () => {
     expect(warning).toContain('64 B budget')
     expect(warning).toContain('body')
     expect(warning).toContain('`pick` or `transform`')
+  })
+
+  it('separates several named fields so the list reads as a list', () => {
+    const warning = payloadBudgetWarning(
+      checkPayloadBudget('posts', { body: 'x'.repeat(200), note: 'y'.repeat(100) }, 64),
+    )
+
+    expect(warning).toMatch(/Largest fields: body \([^)]+\), note \([^)]+\)\./)
   })
 
   it('reads correctly when there are no fields to name', () => {

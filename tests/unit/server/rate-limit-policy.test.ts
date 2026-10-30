@@ -240,6 +240,16 @@ describe('resolveClientIp', () => {
     '1.2.3.4 OR 1=1',
     'a:b:c\nx-injected: yes',
     '../../etc/passwd',
+    // The three anchored patterns in this module, one case each. Every entry
+    // above has junk at the *end*, which leaves an unanchored start matching:
+    // the allowlist, the bracketed-IPv6 split and its trailing `$` could all
+    // lose an anchor without a test noticing, and losing one turns a
+    // whole-string check into "contains something address-shaped" — which
+    // accepts the whole string, junk included, into a storage key and a log
+    // line.
+    'evil 1.2.3.4',
+    'x[2001:db8::1]:443',
+    '[2001:db8::1]:443x',
   ])('refuses %j as an address and falls back to the socket', (spoofed) => {
     // An entry from this header becomes part of a storage key and a log line, so
     // it is whitelisted rather than trusted.
@@ -256,6 +266,21 @@ describe('resolveClientIp', () => {
         trustProxyHops: 1,
       }),
     ).toBe('203.0.113.7')
+  })
+
+  it('drops empty entries before counting hops, not after', () => {
+    // The hop count is an index from the right, so an empty entry left in the
+    // chain shifts every position past it. At one hop the shift is invisible —
+    // the rightmost entry is the rightmost entry either way — which is why this
+    // case has to reach past it. Keeping `, ,` in the chain here would count the
+    // empty string as the trusted hop and fall back to the socket.
+    expect(
+      resolveClientIp({
+        forwardedFor: ' 9.9.9.9 , , 203.0.113.7 ',
+        socketAddress: '10.0.0.1',
+        trustProxyHops: 2,
+      }),
+    ).toBe('9.9.9.9')
   })
 
   it('returns null when neither the header nor the socket yields anything usable', () => {

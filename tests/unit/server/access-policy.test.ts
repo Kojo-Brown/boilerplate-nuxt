@@ -111,6 +111,52 @@ describe('resolveAccess', () => {
 })
 
 /**
+ * `publicApiPatterns` is the input to the anti-rot gate below, so it is tested
+ * directly rather than only through it. A loop over a list is a bad place to
+ * find out the list was wrong.
+ */
+describe('publicApiPatterns', () => {
+  const rules: Readonly<Record<string, RouteAccess>> = {
+    '/**': 'unmanaged',
+    '/api/**': 'authenticated',
+    '/api/auth/**': 'public',
+    '/api/metrics': 'public',
+    '/api/todos/**': 'authenticated',
+    // Public, and outside `/api` — page and asset traffic is not a carve-out in
+    // the default deny, so it must not be reported as one.
+    '/healthz': 'public',
+  }
+
+  it('returns exactly the public rules under /api', () => {
+    expect(publicApiPatterns(rules).toSorted()).toEqual(['/api/auth/**', '/api/metrics'])
+  })
+
+  it('omits authenticated rules under /api', () => {
+    expect(publicApiPatterns({ '/api/**': 'authenticated' })).toEqual([])
+  })
+
+  it('omits a public rule that is not under /api', () => {
+    expect(publicApiPatterns({ '/healthz': 'public' })).toEqual([])
+  })
+
+  it('defaults to the real table, and every key it reports is a public /api rule', () => {
+    const patterns = publicApiPatterns()
+
+    expect(patterns.length).toBeGreaterThan(2)
+    for (const pattern of patterns) {
+      expect(pattern.startsWith('/api')).toBe(true)
+      expect(serverAccessRules[pattern]).toBe('public')
+    }
+    // The other direction, which the loop above cannot see: nothing public under
+    // `/api` is missing from the list.
+    const expected = Object.keys(serverAccessRules).filter(
+      (pattern) => serverAccessRules[pattern] === 'public' && pattern.startsWith('/api'),
+    )
+    expect(patterns.toSorted()).toEqual(expected.toSorted())
+  })
+})
+
+/**
  * The anti-rot gates. A default-deny table only stays trustworthy while its
  * carve-outs describe routes that exist and while the rules it names are
  * reachable at all.
@@ -126,7 +172,17 @@ describe('the policy and the route tree agree', () => {
   })
 
   it('has no public carve-out left over from a deleted route', () => {
-    for (const pattern of publicApiPatterns()) {
+    const patterns = publicApiPatterns()
+
+    // A floor, not decoration. Everything below happens inside the loop, so a
+    // `publicApiPatterns` that returned nothing would make this test pass by
+    // checking nothing at all — and the whole point of the gate is to notice a
+    // carve-out that stopped describing a real route. Mutation testing is how
+    // that came up: six mutants of the filter in `publicApiPatterns`, including
+    // one that drops every entry, survived the suite before this line existed.
+    expect(patterns.length).toBeGreaterThan(2)
+
+    for (const pattern of patterns) {
       const prefix = pattern.endsWith('/**') ? pattern.slice(0, -3) : pattern
       const covered = apiPaths.filter(
         (path) => path === prefix || path.startsWith(`${prefix}/`) || pattern === path,

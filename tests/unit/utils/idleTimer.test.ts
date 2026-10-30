@@ -32,20 +32,37 @@ describe('normalizeIdleTiming', () => {
     })
   })
 
+  // Each of these asserts the message, not just the `TypeError`. The three call
+  // sites pass the option's name in so the thrower can say which duration was
+  // wrong, and a bare `toThrow(TypeError)` leaves all three names — and the
+  // sentence itself — unpinned: four mutants that blank them survived the suite
+  // before these matchers named anything.
   it.each([{ timeout: 0 }, { timeout: -1 }, { timeout: Number.NaN }, { timeout: Infinity }])(
-    'rejects a timeout of $timeout',
+    'rejects a timeout of $timeout, saying which duration it was',
     (options) => {
+      expect(() => normalizeIdleTiming(options)).toThrow(
+        /^timeout must be a finite, positive number of milliseconds$/,
+      )
       expect(() => normalizeIdleTiming(options)).toThrow(TypeError)
     },
   )
 
-  it.each([0, -1, Number.NaN])('rejects a tick of %s', (tick) => {
+  it.each([0, -1, Number.NaN])('rejects a tick of %s, saying which duration it was', (tick) => {
+    expect(() => normalizeIdleTiming({ timeout: 10_000, tick })).toThrow(
+      /^tick must be a finite, positive number of milliseconds$/,
+    )
     expect(() => normalizeIdleTiming({ timeout: 10_000, tick })).toThrow(TypeError)
   })
 
-  it.each([0, -1, Number.NaN])('rejects a warnAfter of %s', (warnAfter) => {
-    expect(() => normalizeIdleTiming({ timeout: 10_000, warnAfter })).toThrow(TypeError)
-  })
+  it.each([0, -1, Number.NaN])(
+    'rejects a warnAfter of %s, saying which duration it was',
+    (warnAfter) => {
+      expect(() => normalizeIdleTiming({ timeout: 10_000, warnAfter })).toThrow(
+        /^warnAfter must be a finite, positive number of milliseconds$/,
+      )
+      expect(() => normalizeIdleTiming({ timeout: 10_000, warnAfter })).toThrow(TypeError)
+    },
+  )
 
   it('rejects a warning that would never be seen', () => {
     expect(() => normalizeIdleTiming({ timeout: 10_000, warnAfter: 10_000 })).toThrow(
