@@ -146,12 +146,19 @@ export interface ConflictContext {
  * explains the miss is the same row the conflict UI has to render — asking for
  * it twice would be two chances to see two different answers.
  *
- * Run this **inside the same transaction as the failed write**. Outside it, the
- * re-read can observe a third state — somebody deleted the row between the
- * update and the select — and the client would be shown a conflict against a
- * version that no longer exists either. Inside, the transaction's snapshot is
- * the one the update ran against, so the answer describes the same instant the
- * conflict happened at.
+ * Run this **inside the same transaction as the failed write**, so the two
+ * statements are one unit of work on one session and the route cannot answer
+ * from a connection that has since been handed to somebody else.
+ *
+ * What the transaction does **not** buy is a frozen view. These routes run at
+ * READ COMMITTED, where every statement takes its own snapshot, so a row
+ * deleted and committed between the missed update and this re-read is reported
+ * as `missing` — from inside the transaction, pinned by
+ * `tests/integration/todo-store.test.ts`. That is the better of the two
+ * answers (there is nothing to merge against a row that is gone); what would be
+ * wrong is building the next piece of conflict handling on the belief that the
+ * re-read cannot see it. An answer that really is of one instant needs
+ * REPEATABLE READ, which these routes do not ask for.
  *
  * It is a second round trip on the failure path only, which is the path that is
  * already rare and already going to cost the user a decision.

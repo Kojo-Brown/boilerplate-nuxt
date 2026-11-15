@@ -16,8 +16,19 @@ Production-grade Nuxt 4 full-stack boilerplate. Spec-driven and PR-driven: one `
    pnpm typecheck
    pnpm lint
    pnpm test
+   pnpm test:integration
    pnpm build
    ```
+   `pnpm test:integration` is the `integration` CI job and blocks a merge like
+   the rest, so it belongs in this list. It is seconds of work: `globalSetup`
+   starts one `postgres:17-alpine` through Testcontainers, applies
+   `server/db/migrations/*.sql` to an empty database, and the suites run
+   serially against it. All it needs is a Docker socket — no service to start,
+   no `DATABASE_URL` to set. See `docs/integration-testing.md` before adding a
+   suite; the three rules that bite are that a held transaction occupies its
+   own connection (every client is `max: 1`, so observe it from a third one),
+   that a blocked session cannot be asked whether it is blocked, and that a
+   Drizzle builder does not reach the wire until something subscribes to it.
 6. Commit, `git push -u origin <branch>`, then `gh pr create`.
 7. `gh pr checks --watch` → **merge only if every check is green**:
    `gh pr merge --squash --delete-branch`
