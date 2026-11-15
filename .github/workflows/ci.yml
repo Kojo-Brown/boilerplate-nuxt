@@ -186,6 +186,41 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  integration:
+    name: Postgres integration (Testcontainers)
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    # No Node matrix, for the same reason as `mutation` and `a11y`: what these
+    # suites measure is Postgres' behaviour — row locks, `SKIP LOCKED`, what a
+    # blocked UPDATE does when the transaction ahead of it commits — and the
+    # Node major underneath does not change any of it.
+    #
+    # No `services:` block either. Testcontainers starts the database itself
+    # from `tests/integration/setup/global.ts`, so the version under test is
+    # pinned in the repository rather than in this file, and the same command
+    # runs here and on a laptop with nothing configured. `ubuntu-latest` has a
+    # Docker socket, which is the only requirement.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --strict-peer-dependencies
+        env:
+          NODE_OPTIONS: --throw-deprecation
+
+      - name: Integration tests
+        run: pnpm test:integration
+        env:
+          NODE_OPTIONS: --throw-deprecation
+
   a11y:
     name: WCAG 2.2 AA (axe)
     runs-on: ubuntu-latest

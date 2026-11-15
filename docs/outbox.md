@@ -93,7 +93,14 @@ Exactly-once is a property of the pair; the id is the producer's half.
 
 **Ordered when idle, not under failure.** A batch is claimed in
 `available_at, created_at` order and published sequentially, so a healthy queue
-delivers in commit order. A failed event is rescheduled _behind_ events that
+delivers in commit order. The claim's `ORDER BY` only decides _which_ rows it
+takes, though: the `UPDATE … RETURNING` wrapped around it has no defined row
+order and does not return the subquery's — a batch seeded oldest-first came back
+newest-first the first time this was run against a real Postgres. The sort that
+makes the sentence above true is `inCommitOrder` in
+`server/utils/outbox-store.ts`, and it sorts by `created_at` alone, because
+`RETURNING` gives the row _after_ the update and every row in the batch carries
+the same freshly-set lease. A failed event is rescheduled _behind_ events that
 committed after it. Preserving order under failure would mean stopping the queue
 at the first failure, and one unreachable consumer would then hold up every other
 event in the table. Consumers that need per-aggregate ordering compare the

@@ -200,12 +200,39 @@ export function deadLetterStatement(
     .where(and(eq(outbox.id, input.id), isNull(outbox.publishedAt)))
 }
 
+/**
+ * The order a claimed batch is published in.
+ *
+ * `claimStatement` orders its subquery — that is what decides *which* rows a
+ * claim takes — but the `UPDATE … RETURNING` around it has no defined row
+ * order, and Postgres does not hand them back in the subquery's order: a batch
+ * seeded oldest-first came back newest-first the first time it was claimed
+ * against a real server (`tests/integration/outbox-store.test.ts`). The relay
+ * publishes the array in order, so without this the "an idle queue delivers in
+ * commit order" paragraph in `outbox.ts` was describing an accident of the
+ * query plan.
+ *
+ * By `created_at` alone, and not by the `available_at, created_at` the claim
+ * selects on, because `RETURNING` gives the row *after* the update: every row
+ * in the batch now carries the same `available_at`, the lease the claim just
+ * set. Commit order is therefore the only order still recoverable here — which
+ * is exactly the guarantee `outbox.ts` makes and no more than it, since that
+ * same paragraph says order is not preserved across retries.
+ *
+ * Sorted here rather than in `relayBatch`, because it is a property of this
+ * driver's result and not of the relay: another {@link OutboxStore} may return
+ * rows in order already.
+ */
+function inCommitOrder(rows: readonly OutboxRow[]): OutboxRow[] {
+  return [...rows].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+}
+
 /** Binds the statements above to a database as the port the relay expects. */
 export function createDrizzleOutboxStore(db: OutboxDatabase): OutboxStore {
   return {
     async claim(input) {
       const rows = await claimStatement(db, input)
-      return rows.map(toOutboxRecord)
+      return inCommitOrder(rows).map(toOutboxRecord)
     },
     async markPublished(input) {
       await markPublishedStatement(db, input)
